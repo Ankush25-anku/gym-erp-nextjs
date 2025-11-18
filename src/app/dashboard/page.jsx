@@ -1,6 +1,6 @@
 "use client";
 
-import SyncClerkUser from "@/components/SyncClerkUser";
+import SyncClerkUser from "../../components/SyncClerkUser";
 import { UserButton } from "@clerk/nextjs";
 
 export default function Dashboard() {

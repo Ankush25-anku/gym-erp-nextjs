@@ -3,9 +3,8 @@ const mongoose = require("mongoose");
 const AttendanceSchema = new mongoose.Schema(
   {
     userId: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: String, // Clerk user sub is a string
       required: true,
-      refPath: "category", // dynamic reference
     },
     category: {
       type: String,

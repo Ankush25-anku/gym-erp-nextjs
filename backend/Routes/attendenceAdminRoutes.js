@@ -1,15 +1,21 @@
 const express = require("express");
 const router = express.Router();
 const Attendance = require("../models/Attendance");
+const verifyClerkToken = require("../middleware/verifyClerkToken");
 
-// ✅ GET all attendance records filtered by date and gymId (and optional category)
-router.get("/", async (req, res) => {
+/* -------------------------------------------------------------------------- */
+/*                         ATTENDANCE ROUTES USING USERID                     */
+/* -------------------------------------------------------------------------- */
+
+// ✅ GET all attendance records filtered by date, category, and gymId (user-specific)
+router.get("/", verifyClerkToken, async (req, res) => {
   try {
     const { date, category, gymId } = req.query;
+    const userId = req.clerkUser?.sub;
 
-    const filter = {};
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
-    // ✅ Allow gymId to be optional (for "All Gyms" case)
+    const filter = { userId };
     if (gymId) filter.gymId = gymId;
     if (date) filter.date = date;
     if (category) filter.category = category;
@@ -22,61 +28,58 @@ router.get("/", async (req, res) => {
   }
 });
 
-// ✅ POST new attendance record
-router.post("/", async (req, res) => {
-  const { userId, status, date, category, gymId } = req.body;
-
-  if (!userId || !status || !date || !category || !gymId) {
-    return res.status(400).json({
-      error: "userId, status, date, category, and gymId are required",
-    });
-  }
-
+// ✅ POST new attendance record (user-specific)
+router.post("/", verifyClerkToken, async (req, res) => {
   try {
+    const userId = req.clerkUser?.sub;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    const { status, date, category, gymId } = req.body;
+
+    if (!status || !date || !category || !gymId) {
+      return res.status(400).json({
+        error: "status, date, category, and gymId are required",
+      });
+    }
+
     const newAttendance = new Attendance({
-      userId, // ✅ use the destructured userId
+      userId, // from token
       status,
       date,
       category,
       gymId,
-      time: new Date(), // timestamp
+      time: new Date(),
     });
 
     const saved = await newAttendance.save();
     res.status(201).json(saved);
   } catch (err) {
-    console.error("Save Error:", err.message);
+    console.error("Save Error:", err);
     res.status(500).json({ error: "Failed to save attendance" });
   }
 });
 
-// ✅ PUT update existing attendance record by ID
-router.put("/:id", async (req, res) => {
-  const { userId, status, date, category, gymId } = req.body;
-
-  if (!userId || !status || !date || !category || !gymId) {
-    return res.status(400).json({
-      error: "userId, status, date, category, and gymId are required",
-    });
-  }
-
+// ✅ PUT update attendance record (user-specific)
+router.put("/:id", verifyClerkToken, async (req, res) => {
   try {
-    const updated = await Attendance.findByIdAndUpdate(
-      req.params.id,
-      {
-        userId,
-        status,
-        date,
-        category,
-        gymId,
-        time: new Date(), // update timestamp
-      },
+    const userId = req.clerkUser?.sub;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    const { status, date, category, gymId } = req.body;
+    if (!status || !date || !category || !gymId) {
+      return res.status(400).json({
+        error: "status, date, category, and gymId are required",
+      });
+    }
+
+    const updated = await Attendance.findOneAndUpdate(
+      { _id: req.params.id, userId }, // ensure user can only update their own record
+      { status, date, category, gymId, time: new Date() },
       { new: true }
     );
 
-    if (!updated) {
+    if (!updated)
       return res.status(404).json({ error: "Attendance not found" });
-    }
 
     res.json(updated);
   } catch (err) {
@@ -85,14 +88,19 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-// ✅ DELETE attendance record
-router.delete("/:id", async (req, res) => {
+// ✅ DELETE attendance record (user-specific)
+router.delete("/:id", verifyClerkToken, async (req, res) => {
   try {
-    const deleted = await Attendance.findByIdAndDelete(req.params.id);
+    const userId = req.clerkUser?.sub;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
-    if (!deleted) {
+    const deleted = await Attendance.findOneAndDelete({
+      _id: req.params.id,
+      userId,
+    });
+
+    if (!deleted)
       return res.status(404).json({ error: "Attendance not found" });
-    }
 
     res.json({ message: "Attendance deleted successfully" });
   } catch (err) {
@@ -101,16 +109,17 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
-// ✅ GET all attendance records for a specific user and gym
-router.get("/userAttendance", async (req, res) => {
+// ✅ GET all attendance for logged-in user and optional gymId
+router.get("/my", verifyClerkToken, async (req, res) => {
   try {
-    const { userId, gymId } = req.query;
+    const userId = req.clerkUser?.sub;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
-    if (!userId || !gymId) {
-      return res.status(400).json({ error: "userId and gymId are required" });
-    }
+    const { gymId } = req.query;
+    const filter = { userId };
+    if (gymId) filter.gymId = gymId;
 
-    const records = await Attendance.find({ userId, gymId }).sort({ time: -1 });
+    const records = await Attendance.find(filter).sort({ time: -1 });
     res.json(records);
   } catch (err) {
     console.error("Fetch Error:", err);

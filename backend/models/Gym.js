@@ -12,7 +12,7 @@ const GymSchema = new mongoose.Schema(
       required: [true, "Email is required"],
       lowercase: true,
       trim: true,
-      match: [/.+@.+\..+/, "Please enter a valid email address"],
+      match: [/.+@.+\..+/, "Please enter a valid "],
     },
     phone: {
       type: String,

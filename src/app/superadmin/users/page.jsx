@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import MasterLayout from "@/masterLayout/MasterLayout";
+import MasterLayout from "../../../masterLayout/MasterLayout";
 import { Table, Badge, Button, Modal, Form } from "react-bootstrap";
 import { Trash2 } from "lucide-react";
 

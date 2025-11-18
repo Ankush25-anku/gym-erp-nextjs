@@ -1,262 +1,382 @@
-"use client";
-import React, { useEffect, useState } from "react";
-import axios from "axios";
-import { Button, Modal, Form } from "react-bootstrap";
-import MasterLayout from "@/masterLayout/MasterLayout";
-import { useAuth, useUser } from "@clerk/nextjs";
+// "use client";
 
-const API = `${process.env.NEXT_PUBLIC_API_URL}/api/inventory`;
+// import { useEffect, useState } from "react";
+// import { useAuth } from "@clerk/nextjs";
+// import axios from "axios";
+// import {
+//   Button,
+//   Modal,
+//   Form,
+//   Table,
+//   Alert,
+//   Spinner,
+//   Card,
+// } from "react-bootstrap";
+// import { Dumbbell, Cog, Weight, Activity, Box } from "lucide-react";
 
-const Inventory = () => {
-  const [inventoryItems, setInventoryItems] = useState([]);
-  const [showModal, setShowModal] = useState(false);
-  const [editingItem, setEditingItem] = useState(null);
-  const [gymId, setGymId] = useState("");
+// const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
-  const { getToken } = useAuth();
-  const { user, isLoaded } = useUser();
+// export default function Inventory() {
+//   const { getToken, isLoaded } = useAuth();
 
-  const fetchInventory = async () => {
-    try {
-      const token = await getToken();
-      if (!isLoaded || !user || !token) return;
+//   const [gymCode, setGymCode] = useState("");
+//   const [items, setItems] = useState([]);
+//   const [summary, setSummary] = useState({
+//     dumbbell: 0,
+//     weight: 0,
+//     machine: 0,
+//     treadmill: 0,
+//     other: 0,
+//   });
 
-      const role =
-        user.publicMetadata?.role || user.unsafeMetadata?.role || "member";
+//   const [loading, setLoading] = useState(false);
+//   const [alert, setAlert] = useState({ type: "", message: "" });
+//   const [showAdd, setShowAdd] = useState(false);
 
-      const gymUrl =
-        role === "superadmin"
-          ? `${process.env.NEXT_PUBLIC_API_URL}/api/gyms`
-          : `${process.env.NEXT_PUBLIC_API_URL}/api/gyms/my`;
+//   // 👉 NEW — For category image modal
+//   const [showCategoryModal, setShowCategoryModal] = useState(false);
+//   const [selectedCategory, setSelectedCategory] = useState("");
 
-      const gymRes = await axios.get(gymUrl, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+//   // Add Item Form
+//   const [form, setForm] = useState({
+//     itemName: "",
+//     category: "",
+//     quantity: "",
+//     status: "Available",
+//   });
 
-      const gyms = Array.isArray(gymRes.data)
-        ? gymRes.data
-        : gymRes.data.gyms || [];
+//   // 👉 IMAGE COLLECTION FOR EACH CATEGORY
+//   // DYNAMIC IMAGES FROM PUBLIC FOLDER
+//   const categoryImages = {
+//     dumbbell: ["1.jpg", "2.jpg", "3.jpg", "4.jpg"],
+//     weight: ["1.jpg", "2.jpg", "3.jpg", "4.jpg"],
+//     machine: ["1.jpg", "2.jpg", "3.jpg", "4.jpg"],
+//     treadmill: ["1.jpg", "2.jpg", "3.jpg", "4.jpg"],
+//     other: ["1.jpg", "2.jpg", "3.jpg", "4.jpg"],
+//   };
 
-      const selectedGym = gyms[0];
-      const foundGymId = selectedGym?._id;
-      if (!foundGymId) return;
+//   // Load gym
+//   useEffect(() => {
+//     const loadGym = async () => {
+//       if (!isLoaded) return;
 
-      setGymId(foundGymId);
+//       try {
+//         const token = await getToken();
+//         const res = await axios.get(`${API_BASE}/api/gym/my-gym`, {
+//           headers: { Authorization: `Bearer ${token}` },
+//         });
 
-      const res = await axios.get(
-        `${API}?gymId=${foundGymId}&isDeleted=false`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "x-clerk-user-id": user.id,
-          },
-        }
-      );
+//         const code = res.data?.gym?.gymCode;
+//         if (code) {
+//           setGymCode(code);
+//           fetchInventory(code);
+//         }
+//       } catch {
+//         setAlert({ type: "danger", message: "Failed to load gym details." });
+//       }
+//     };
 
-      setInventoryItems(res.data);
-    } catch (err) {
-      console.error(
-        "❌ Failed to fetch inventory:",
-        err.response?.data || err.message
-      );
-    }
-  };
+//     loadGym();
+//   }, [isLoaded, getToken]);
 
-  const openAddModal = () => {
-    setEditingItem({ itemName: "", quantity: 0, status: "", notes: "" });
-    setShowModal(true);
-  };
+//   // Fetch inventory
+//   const fetchInventory = async (code = gymCode) => {
+//     try {
+//       setLoading(true);
+//       const res = await axios.get(`${API_BASE}/api/inventory/by-gym`, {
+//         params: { gymCode: code },
+//       });
 
-  const openEditModal = (item) => {
-    setEditingItem({ ...item });
-    setShowModal(true);
-  };
+//       const list = res.data.items || [];
+//       setItems(list);
 
-  const handleSave = async () => {
-    try {
-      const token = await getToken();
-      if (!isLoaded || !user || !token) return;
+//       const totals = {
+//         dumbbell: 0,
+//         weight: 0,
+//         machine: 0,
+//         treadmill: 0,
+//         other: 0,
+//       };
+//       list.forEach((i) => {
+//         totals[i.category] += Number(i.quantity);
+//       });
 
-      const { itemName, quantity, status, notes, _id } = editingItem;
-      if (!gymId || !itemName.trim() || quantity < 0 || !status) {
-        alert("Please fill all required fields correctly.");
-        return;
-      }
+//       setSummary(totals);
+//     } catch (err) {
+//       setAlert({ type: "danger", message: "Failed to fetch inventory." });
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
 
-      const payload = { itemName, quantity, status, notes, gymId };
-      const headers = {
-        Authorization: `Bearer ${token}`,
-        "x-clerk-user-id": user.id,
-      };
+//   // Add item
+//   const saveItem = async () => {
+//     if (!form.itemName || !form.category || !form.quantity) {
+//       return setAlert({
+//         type: "danger",
+//         message: "Please fill all required fields.",
+//       });
+//     }
 
-      let res;
-      if (_id) {
-        res = await axios.put(`${API}/${_id}`, payload, { headers });
-      } else {
-        res = await axios.post(API, payload, { headers });
-      }
+//     try {
+//       setLoading(true);
+//       await axios.post(`${API_BASE}/api/inventory`, {
+//         ...form,
+//         gymCode,
+//       });
 
-      setShowModal(false);
-      fetchInventory();
-    } catch (err) {
-      console.error("❌ Save failed:", err.response?.data || err.message);
-    }
-  };
+//       setShowAdd(false);
+//       setForm({
+//         itemName: "",
+//         category: "",
+//         quantity: "",
+//         status: "Available",
+//       });
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this item?")) return;
+//       fetchInventory();
+//       setAlert({ type: "success", message: "Item added successfully." });
+//     } catch (err) {
+//       setAlert({ type: "danger", message: "Failed to add item." });
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
 
-    try {
-      const token = await getToken();
-      if (!isLoaded || !user || !token) return;
+//   // Summary Icons
+//   const iconMap = {
+//     dumbbell: <Dumbbell size={28} />,
+//     weight: <Weight size={28} />,
+//     machine: <Cog size={28} />,
+//     treadmill: <Activity size={28} />,
+//     other: <Box size={28} />,
+//   };
 
-      const headers = {
-        Authorization: `Bearer ${token}`,
-        "x-clerk-user-id": user.id,
-      };
-      await axios.put(`${API}/${id}`, { isDeleted: true }, { headers });
+//   return (
+//     <div className="container py-4">
+//       {/* Page Header */}
+//       <div className="d-flex justify-content-between align-items-center mb-4">
+//         <div>
+//           <h2 className="fw-bold">Inventory</h2>
+//           <p className="text-muted mb-0">Manage gym equipment and items</p>
+//         </div>
+//         <Button size="lg" onClick={() => setShowAdd(true)}>
+//           + Add Item
+//         </Button>
+//       </div>
 
-      fetchInventory();
-    } catch (err) {
-      console.error("❌ Delete error:", err.response?.data || err.message);
-      alert("Failed to delete item.");
-    }
-  };
+//       {alert.message && <Alert variant={alert.type}>{alert.message}</Alert>}
 
-  useEffect(() => {
-    if (isLoaded) fetchInventory();
-  }, [isLoaded]);
+//       {/* SUMMARY CARDS */}
+//       {/* SUMMARY CARDS */}
+//       <div className="row g-3 mb-4">
+//         {Object.keys(summary).map((cat) => {
+//           const bgColor =
+//             cat === "dumbbell"
+//               ? "#4C7EFF"
+//               : cat === "weight"
+//               ? "#34C759"
+//               : cat === "machine"
+//               ? "#AF52DE"
+//               : cat === "treadmill"
+//               ? "#FF9F0A"
+//               : "#8E8E93";
 
-  return (
-    <MasterLayout>
-      <div className="container py-4">
-        <div className="d-flex justify-content-between align-items-center mb-4">
-          <h2 className="fw-bold">Gym Inventory</h2>
-          <Button onClick={openAddModal}>+ Add Item</Button>
-        </div>
+//           return (
+//             <div className="col-6 col-md-4 col-lg-3" key={cat}>
+//               <Card
+//                 className="summary-card p-3 shadow-sm"
+//                 style={{
+//                   background: "#ffffff", // default white
+//                   borderRadius: "14px",
+//                   cursor: "pointer",
+//                   transition: "0.3s ease",
+//                 }}
+//                 onMouseEnter={(e) => {
+//                   e.currentTarget.style.background = bgColor;
+//                   e.currentTarget.style.color = "#fff";
+//                 }}
+//                 onMouseLeave={(e) => {
+//                   e.currentTarget.style.background = "#ffffff";
+//                   e.currentTarget.style.color = "#000";
+//                 }}
+//                 onClick={() => {
+//                   setSelectedCategory(cat);
+//                   setShowCategoryModal(true);
+//                 }}
+//               >
+//                 <Card.Body className="text-center">
+//                   <div
+//                     className="mb-2 icon-container"
+//                     style={{ transition: "0.3s" }}
+//                   >
+//                     {iconMap[cat]}
+//                   </div>
+//                   <h6 className="text-uppercase small mb-1">{cat}</h6>
+//                   <h3 className="fw-bold">{summary[cat]}</h3>
+//                 </Card.Body>
+//               </Card>
+//             </div>
+//           );
+//         })}
+//       </div>
 
-        <table className="table table-bordered">
-          <thead className="table-light">
-            <tr>
-              <th>Item Name</th>
-              <th>Quantity</th>
-              <th>Status</th>
-              <th>Notes</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {inventoryItems.map((item) => (
-              <tr key={item._id}>
-                <td>{item.itemName}</td>
-                <td>{item.quantity}</td>
-                <td>{item.status}</td>
-                <td>{item.notes || "-"}</td>
-                <td>
-                  <Button
-                    variant="outline-primary"
-                    size="sm"
-                    onClick={() => openEditModal(item)}
-                    className="me-2"
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    variant="outline-danger"
-                    size="sm"
-                    onClick={() => handleDelete(item._id)}
-                  >
-                    🗑
-                  </Button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+//       {/* IMAGE POPUP MODAL */}
+//       {/* IMAGE POPUP MODAL */}
+//       <Modal
+//         show={showCategoryModal}
+//         onHide={() => setShowCategoryModal(false)}
+//         centered
+//         size="lg"
+//       >
+//         <Modal.Header closeButton>
+//           <Modal.Title>
+//             {selectedCategory && selectedCategory.toUpperCase()} Gallery
+//           </Modal.Title>
+//         </Modal.Header>
 
-        {/* Modal Form */}
-        <Modal show={showModal} onHide={() => setShowModal(false)} centered>
-          <Modal.Header closeButton>
-            <Modal.Title>
-              {editingItem?._id ? "Edit Item" : "Add New Item"}
-            </Modal.Title>
-          </Modal.Header>
-          <Modal.Body>
-            <Form>
-              <Form.Group className="mb-2">
-                <Form.Label>Item Name</Form.Label>
-                <Form.Control
-                  type="text"
-                  value={editingItem?.itemName || ""}
-                  onChange={(e) =>
-                    setEditingItem((prev) => ({
-                      ...prev,
-                      itemName: e.target.value,
-                    }))
-                  }
-                />
-              </Form.Group>
+//         <Modal.Body>
+//           <div className="image-strip-container">
+//             <div className="image-strip">
+//               {categoryImages[selectedCategory]?.map((img, index) => (
+//                 <img
+//                   key={index}
+//                   src={`/assets/images/inventory/${selectedCategory}/${img}`}
+//                   className="strip-img"
+//                 />
+//               ))}
 
-              <Form.Group className="mb-2">
-                <Form.Label>Quantity</Form.Label>
-                <Form.Control
-                  type="number"
-                  value={editingItem?.quantity ?? 0}
-                  onChange={(e) =>
-                    setEditingItem((prev) => ({
-                      ...prev,
-                      quantity: parseInt(e.target.value, 10) || 0,
-                    }))
-                  }
-                />
-              </Form.Group>
+//               {/* Duplicate images to create infinite loop scrolling */}
+//               {categoryImages[selectedCategory]?.map((img, index) => (
+//                 <img
+//                   key={`dup-${index}`}
+//                   src={`/assets/images/inventory/${selectedCategory}/${img}`}
+//                   className="strip-img"
+//                 />
+//               ))}
+//             </div>
+//           </div>
+//         </Modal.Body>
 
-              <Form.Group className="mb-2">
-                <Form.Label>Status</Form.Label>
-                <Form.Select
-                  value={editingItem?.status || ""}
-                  onChange={(e) =>
-                    setEditingItem((prev) => ({
-                      ...prev,
-                      status: e.target.value,
-                    }))
-                  }
-                  required
-                >
-                  <option value="">Select Status</option>
-                  <option value="Available">Available</option>
-                  <option value="Out of Stock">Out of Stock</option>
-                  <option value="In Use">In Use</option>
-                </Form.Select>
-              </Form.Group>
+//         <Modal.Footer>
+//           <Button onClick={() => setShowCategoryModal(false)}>Close</Button>
+//         </Modal.Footer>
+//       </Modal>
 
-              <Form.Group className="mb-2">
-                <Form.Label>Notes</Form.Label>
-                <Form.Control
-                  type="text"
-                  value={editingItem?.notes || ""}
-                  onChange={(e) =>
-                    setEditingItem((prev) => ({
-                      ...prev,
-                      notes: e.target.value,
-                    }))
-                  }
-                />
-              </Form.Group>
-            </Form>
-          </Modal.Body>
-          <Modal.Footer>
-            <Button variant="secondary" onClick={() => setShowModal(false)}>
-              Cancel
-            </Button>
-            <Button variant="primary" onClick={handleSave}>
-              Save
-            </Button>
-          </Modal.Footer>
-        </Modal>
-      </div>
-    </MasterLayout>
-  );
-};
+//       {/* Inventory Table */}
+//       <div className="card shadow-sm border-0 rounded-4 mt-4">
+//         <div className="card-body">
+//           <h5 className="mb-3">Inventory List</h5>
 
-export default Inventory;
+//           <div className="table-responsive">
+//             <Table hover>
+//               <thead className="table-light">
+//                 <tr>
+//                   <th>Item Name</th>
+//                   <th>Category</th>
+//                   <th>Quantity</th>
+//                   <th>Status</th>
+//                 </tr>
+//               </thead>
+
+//               <tbody>
+//                 {items.length === 0 && (
+//                   <tr>
+//                     <td colSpan={4} className="text-center text-muted py-4">
+//                       No items found.
+//                     </td>
+//                   </tr>
+//                 )}
+
+//                 {items.map((i) => (
+//                   <tr key={i._id}>
+//                     <td>{i.itemName}</td>
+//                     <td className="text-capitalize">{i.category}</td>
+//                     <td>{i.quantity}</td>
+//                     <td>
+//                       <span
+//                         className={`badge px-3 py-2 ${
+//                           i.status === "Available"
+//                             ? "bg-success"
+//                             : i.status === "In Use"
+//                             ? "bg-warning text-dark"
+//                             : "bg-danger"
+//                         }`}
+//                       >
+//                         {i.status}
+//                       </span>
+//                     </td>
+//                   </tr>
+//                 ))}
+//               </tbody>
+//             </Table>
+//           </div>
+//         </div>
+//       </div>
+
+//       {/* ADD ITEM MODAL */}
+//       <Modal show={showAdd} onHide={() => setShowAdd(false)} centered size="md">
+//         <Modal.Header closeButton>
+//           <Modal.Title>Add Inventory Item</Modal.Title>
+//         </Modal.Header>
+
+//         <Modal.Body>
+//           <Form>
+//             <Form.Group className="mb-3">
+//               <Form.Label>Item Name</Form.Label>
+//               <Form.Control
+//                 placeholder="e.g., Dumbbell 2kg"
+//                 value={form.itemName}
+//                 onChange={(e) => setForm({ ...form, itemName: e.target.value })}
+//               />
+//             </Form.Group>
+
+//             <Form.Group className="mb-3">
+//               <Form.Label>Category</Form.Label>
+//               <Form.Select
+//                 value={form.category}
+//                 onChange={(e) => setForm({ ...form, category: e.target.value })}
+//               >
+//                 <option value="">Select category</option>
+//                 <option value="dumbbell">Dumbbell</option>
+//                 <option value="weight">Weight Plate</option>
+//                 <option value="machine">Machine</option>
+//                 <option value="treadmill">Treadmill</option>
+//                 <option value="other">Other</option>
+//               </Form.Select>
+//             </Form.Group>
+
+//             <Form.Group className="mb-3">
+//               <Form.Label>Quantity</Form.Label>
+//               <Form.Control
+//                 type="number"
+//                 value={form.quantity}
+//                 onChange={(e) => setForm({ ...form, quantity: e.target.value })}
+//               />
+//             </Form.Group>
+
+//             <Form.Group>
+//               <Form.Label>Status</Form.Label>
+//               <Form.Select
+//                 value={form.status}
+//                 onChange={(e) => setForm({ ...form, status: e.target.value })}
+//               >
+//                 <option value="Available">Available</option>
+//                 <option value="In Use">In Use</option>
+//                 <option value="Damaged">Damaged</option>
+//               </Form.Select>
+//             </Form.Group>
+//           </Form>
+//         </Modal.Body>
+
+//         <Modal.Footer>
+//           <Button variant="secondary" onClick={() => setShowAdd(false)}>
+//             Cancel
+//           </Button>
+//           <Button variant="primary" onClick={saveItem}>
+//             Save Item
+//           </Button>
+//         </Modal.Footer>
+//       </Modal>
+//     </div>
+//   );
+// }

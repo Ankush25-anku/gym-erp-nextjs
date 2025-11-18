@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
-import MasterLayout from "@/masterLayout/MasterLayout";
+import MasterLayout from "../../../masterLayout/MasterLayout";
 import { Button, Modal, Form } from "react-bootstrap";
 import { BsTrash, BsPencilSquare } from "react-icons/bs";
 
@@ -29,7 +29,10 @@ export default function GymCreateForm() {
 
   // ✅ Superadmin role check
   useEffect(() => {
-    const user = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("user")) : null;
+    const user =
+      typeof window !== "undefined"
+        ? JSON.parse(localStorage.getItem("user"))
+        : null;
     const role = localStorage.getItem("userRole");
 
     if (!user || role !== "superadmin") {
@@ -75,7 +78,10 @@ export default function GymCreateForm() {
       const token = localStorage.getItem("token");
 
       if (editMode) {
-        const res = await axios.put(`${API_BASE}/api/gyms/${editingGymId}`, formData);
+        const res = await axios.put(
+          `${API_BASE}/api/gyms/${editingGymId}`,
+          formData
+        );
         setGyms((prev) =>
           prev.map((gym) => (gym._id === editingGymId ? res.data : gym))
         );
@@ -121,23 +127,22 @@ export default function GymCreateForm() {
     }
   };
 
-const fetchGyms = async () => {
-  try {
-    const token = localStorage.getItem("token");
-    const role = localStorage.getItem("userRole"); // ✅ Get role from localStorage
+  const fetchGyms = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const role = localStorage.getItem("userRole"); // ✅ Get role from localStorage
 
-    const res = await axios.get(`${API_BASE}/api/gyms`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
+      const res = await axios.get(`${API_BASE}/api/gyms`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-    setGyms(Array.isArray(res.data) ? res.data : res.data.gyms || []);
-  } catch (err) {
-    console.error("Failed to fetch gyms", err);
-  }
-};
-
+      setGyms(Array.isArray(res.data) ? res.data : res.data.gyms || []);
+    } catch (err) {
+      console.error("Failed to fetch gyms", err);
+    }
+  };
 
   useEffect(() => {
     const fetchUserEmail = async () => {

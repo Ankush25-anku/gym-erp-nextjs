@@ -12,6 +12,10 @@ import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 const API = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
+
+// Base backend URL
+// const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+
 const API_URL = `${process.env.NEXT_PUBLIC_API_URL}/api/members`;
 const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`;
 const UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
@@ -137,20 +141,35 @@ const MemberManagement = () => {
   };
 
   const fetchGyms = async () => {
-    const token = await getFreshToken();
-    if (!token) return;
     try {
+      // ✅ Get the JWT token from Clerk
+      const token = await getFreshToken();
+      if (!token) {
+        console.warn("No auth token available, skipping fetchGyms.");
+        return;
+      }
+
+      // Determine URL based on user role
       const role =
         user?.publicMetadata?.role || user?.unsafeMetadata?.role || "member";
       const url =
         role === "superadmin" ? `${API}/api/gyms` : `${API}/api/gyms/my`;
+
+      // Fetch gyms from backend with Authorization header
       const res = await axios.get(url, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}` }, // matches middleware
       });
+
+      // Normalize data
       const data = Array.isArray(res.data) ? res.data : res.data.gyms || [];
       setGyms(data);
     } catch (err) {
-      console.error("Failed to fetch gyms:", err?.response?.data || err);
+      // Handle errors gracefully
+      if (err.response) {
+        console.error("Failed to fetch gyms:", err.response.data);
+      } else {
+        console.error("Failed to fetch gyms:", err);
+      }
     }
   };
 
@@ -218,11 +237,11 @@ const MemberManagement = () => {
       initials,
       joined: newMember.joined ? newMember.joined.toISOString() : "",
       expires: newMember.expires ? newMember.expires.toISOString() : "",
+      userId: user?.id, // ✅ Clerk user ID (matches backend filter)
       userEmail:
         user?.primaryEmailAddress?.emailAddress ||
         user?.emailAddresses?.[0]?.emailAddress ||
         "",
-      createdByClerkId: user?.id,
       isDeleted: false,
     };
 
@@ -230,6 +249,7 @@ const MemberManagement = () => {
       const response = await axios.post(API_URL, memberData, {
         headers: { Authorization: `Bearer ${token}` },
       });
+
       setMembers((prev) => [...prev, response.data]);
       setShowAddModal(false);
       setNewMember({
@@ -255,6 +275,7 @@ const MemberManagement = () => {
       console.error("Error adding member:", err?.response?.data || err);
     }
   };
+
   const handleDelete = async (id) => {
     if (!confirm("Are you sure you want to delete this member?")) return;
     const token = await getFreshToken();

@@ -5,12 +5,16 @@ export default clerkMiddleware();
 
 export const config = {
   matcher: [
-    "/((?!.+\\.[\\w]+$|_next).*)", // protect all routes except static files
-    "/",
-    "/api/clerkusers/:path*",
-    "/member/:path*", // ✅ Protect member routes
-    "/admin", // ✅ Protect /admin
-    "/admin/", // ✅ Protect /admin/
-    "/admin/:path*", // ✅ Protect /admin/dashboard or any nested route
+    // Protect everything except Next.js internals, static files, and auth pages
+    "/((?!_next/|.*\\..*|/login|/signup|/after-signup).*)",
+
+    // Protect API routes
+    "/api/:path*",
+
+    // ✅ Protect all role-based routes
+    "/member/:path*",
+    "/admin/:path*",
+    "/staff/:path*",
+    "/superadmin/:path*",
   ],
 };

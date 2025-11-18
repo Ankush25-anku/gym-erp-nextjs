@@ -29,12 +29,60 @@ router.get("/list", verifyClerkToken, async (req, res) => {
 /*                           ATTENDANCE CRUD APIS                             */
 /* -------------------------------------------------------------------------- */
 // ✅ GET /api/adminstaff - Attendance list by userEmail (from token) & gymId
+// ✅ POST /api/adminstaff - Create new attendance record
+router.post("/", verifyClerkToken, async (req, res) => {
+  try {
+    const { name, email, phone = "", position = "", status, gymId } = req.body;
+
+    // Fetch logged-in user's email and sub (userId) from Clerk token
+    const userEmail = req.clerkUser?.email;
+    const userId = req.clerkUser?.sub;
+
+    // Validate required fields
+    if (!userEmail || !userId || !gymId || !name || !status) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(gymId)) {
+      return res.status(400).json({ error: "Invalid gymId" });
+    }
+
+    // ✅ Ensure status matches the enum exactly
+    const validStatus = ["Present", "Absent"];
+    if (!validStatus.includes(status)) {
+      return res.status(400).json({
+        error: `Invalid status. Must be ${validStatus.join(" or ")}.`,
+      });
+    }
+
+    const newStaff = new Staff({
+      userEmail, // Clerk email
+      userId, // Clerk sub
+      name,
+      email,
+      phone,
+      position,
+      status,
+      gymId,
+    });
+
+    await newStaff.save();
+    res.status(201).json(newStaff);
+  } catch (err) {
+    console.error("❌ Error creating staff:", err.message);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// ✅ GET /api/adminstaff - Attendance list by logged-in user & optional gymId
 router.get("/", verifyClerkToken, async (req, res) => {
   try {
-    const userEmail = req.clerkUser?.email;
+    const userId = req.clerkUser?.sub; // Clerk userId
     const { gymId } = req.query;
 
-    const filter = { userEmail };
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    const filter = { userId }; // filter by logged-in user
 
     // filter by gymId if provided
     if (gymId && mongoose.Types.ObjectId.isValid(gymId)) {
@@ -51,6 +99,7 @@ router.get("/", verifyClerkToken, async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
 // ✅ POST /api/adminstaff - Create new attendance record
 router.post("/", verifyClerkToken, async (req, res) => {
   try {

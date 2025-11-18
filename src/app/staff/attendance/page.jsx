@@ -2,18 +2,24 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
-import MasterLayout from "@/masterLayout/MasterLayout";
+import MasterLayout from "../../../masterLayout/MasterLayout";
 import { Modal, Button, Form } from "react-bootstrap";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export default function StaffAttendance() {
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
+  const [selectedDate, setSelectedDate] = useState(
+    new Date().toISOString().split("T")[0]
+  );
   const [search, setSearch] = useState("");
   const [attendanceList, setAttendanceList] = useState([]);
   const [staffList, setStaffList] = useState([]);
   const [showModal, setShowModal] = useState(false);
-  const [formData, setFormData] = useState({ name: "", status: "Check-in", date: selectedDate });
+  const [formData, setFormData] = useState({
+    name: "",
+    status: "Check-in",
+    date: selectedDate,
+  });
   const [editId, setEditId] = useState(null);
 
   useEffect(() => {
@@ -35,9 +41,13 @@ export default function StaffAttendance() {
 
   const fetchAttendance = async () => {
     try {
-      const res = await axios.get(`${API_URL}/api/staffattendance?date=${selectedDate}`);
+      const res = await axios.get(
+        `${API_URL}/api/staffattendance?date=${selectedDate}`
+      );
       const data = Array.isArray(res.data) ? res.data : [];
-      setAttendanceList(data.sort((a, b) => new Date(b.time) - new Date(a.time)));
+      setAttendanceList(
+        data.sort((a, b) => new Date(b.time) - new Date(a.time))
+      );
     } catch (err) {
       console.error("Error fetching attendance", err);
       setAttendanceList([]);
@@ -51,12 +61,18 @@ export default function StaffAttendance() {
 
     try {
       if (editId) {
-        const res = await axios.put(`${API_URL}/api/staffattendance/${editId}`, formData);
+        const res = await axios.put(
+          `${API_URL}/api/staffattendance/${editId}`,
+          formData
+        );
         setAttendanceList((prev) =>
           prev.map((item) => (item._id === editId ? res.data : item))
         );
       } else {
-        const res = await axios.post(`${API_URL}/api/staffattendance`, formData);
+        const res = await axios.post(
+          `${API_URL}/api/staffattendance`,
+          formData
+        );
         setAttendanceList((prev) => [res.data, ...prev]);
       }
 
@@ -70,7 +86,11 @@ export default function StaffAttendance() {
   };
 
   const handleEdit = (record) => {
-    setFormData({ name: record.name, status: record.status, date: record.date });
+    setFormData({
+      name: record.name,
+      status: record.status,
+      date: record.date,
+    });
     setEditId(record._id);
     setShowModal(true);
   };
@@ -148,7 +168,9 @@ export default function StaffAttendance() {
                         <td>
                           <span
                             className={`badge ${
-                              item.status === "Check-in" ? "bg-success" : "bg-warning"
+                              item.status === "Check-in"
+                                ? "bg-success"
+                                : "bg-warning"
                             }`}
                           >
                             {item.status}
@@ -191,7 +213,9 @@ export default function StaffAttendance() {
                 <Form.Label>Staff Member</Form.Label>
                 <Form.Select
                   value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
                 >
                   <option value="">-- Select Staff --</option>
                   {staffList.map((staff) => (
@@ -205,7 +229,9 @@ export default function StaffAttendance() {
                 <Form.Label>Status</Form.Label>
                 <Form.Select
                   value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, status: e.target.value })
+                  }
                 >
                   <option value="Check-in">Check-in</option>
                   <option value="Check-out">Check-out</option>
@@ -216,7 +242,9 @@ export default function StaffAttendance() {
                 <Form.Control
                   type="date"
                   value={formData.date}
-                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, date: e.target.value })
+                  }
                 />
               </Form.Group>
             </Form>

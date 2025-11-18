@@ -19,8 +19,10 @@ const TrainerManagement = () => {
 
   const fetchTrainers = async () => {
     try {
-      const token = await getToken();
+      const token = await getToken({ template: "backend" }); // ✅ ensure backend token
       if (!token) return;
+
+      console.log("🔹 Fetching trainers with token:", token);
 
       const res = await axios.get(API_URL, {
         headers: {
@@ -28,9 +30,12 @@ const TrainerManagement = () => {
         },
       });
 
+      console.log("✅ Trainers fetched:", res.data);
       setTrainers(res.data);
     } catch (err) {
-      console.error("Failed to fetch trainers:", err);
+      console.error("❌ Failed to fetch trainers:", err?.response || err);
+      if (err?.response?.status === 401)
+        alert("Unauthorized. Please login again.");
     }
   };
 
@@ -103,15 +108,6 @@ const TrainerManagement = () => {
           : parseInt(editingTrainer.members),
       };
 
-      // Use Clerk user email directly if needed
-      if (!trainerToSave._id) {
-        trainerToSave.userEmail =
-          user?.primaryEmailAddress?.emailAddress ||
-          user?.emailAddresses?.[0]?.emailAddress ||
-          "";
-        trainerToSave.isDeleted = false;
-      }
-
       const config = {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -138,6 +134,7 @@ const TrainerManagement = () => {
       alert("Failed to save trainer. Please check your input and login.");
     }
   };
+
   const handleDelete = async (trainer) => {
     console.log("handleDelete called with:", trainer);
 

@@ -24,11 +24,9 @@ const adminTrainerSchema = new mongoose.Schema({
     required: true, // Ensures each trainer is linked to a specific logged-in user
   },
 
-  // ✅ (Optional but recommended) Add createdBy reference
-  createdBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
-    required: false,
+  userId: {
+    type: String,
+    required: true, // store Clerk userId (sub) for ownership
   },
 });
 

@@ -4,10 +4,10 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 
-import MasterLayout from "@/masterLayout/MasterLayout";
-import AdminDashboard from "@/components/child/AdminDashboard";
-import RevenueGrowthOne from "@/components/child/RevenueGrowthOne";
-import EarningStaticOne from "@/components/child/EarningStaticOne";
+// import MasterLayout from "../../masterLayout/MasterLayout";
+import AdminDashboard from "../../components/child/AdminDashboard";
+import RevenueGrowthOne from "../../components/child/RevenueGrowthOne";
+import EarningStaticOne from "../../components/child/EarningStaticOne";
 
 export default function AdminDashboardPage() {
   const router = useRouter();
@@ -29,17 +29,15 @@ export default function AdminDashboardPage() {
   if (!isAuthorized) return null;
 
   return (
-    <MasterLayout>
-      <div className="container-fluid mt-4">
-        {/* Stat cards and check-ins */}
-        <AdminDashboard />
+    <div className="container-fluid mt-4">
+      {/* Stat cards and check-ins */}
+      <AdminDashboard />
 
-        {/* Charts Row */}
-        <div className="row mt-4">
-          {/* <RevenueGrowthOne />
+      {/* Charts Row */}
+      <div className="row mt-4">
+        {/* <RevenueGrowthOne />
           <EarningStaticOne /> */}
-        </div>
       </div>
-    </MasterLayout>
+    </div>
   );
 }

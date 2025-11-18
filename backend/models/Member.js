@@ -43,10 +43,12 @@ const memberSchema = new mongoose.Schema(
 
     // ✅ User reference (who added this member)
     // ✅ Member.js
-    createdBy: {
-      type: String, // Clerk user ID is a string
-      required: true,
-    },
+    // createdBy: {
+    //   type: String, // Clerk user ID is a string
+    //   required: true,
+    // },
+
+    userId: { type: String, required: true },
 
     // ✅ For user-specific filtering
     userEmail: {

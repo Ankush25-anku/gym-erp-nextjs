@@ -1,13 +1,66 @@
+// const mongoose = require("mongoose");
+
+// const ExpenseSchema = new mongoose.Schema(
+//   {
+//     gymId: {
+//       type: mongoose.Schema.Types.ObjectId,
+//       ref: "Gym",
+//       required: true,
+//     },
+//     category: {
+//       type: String,
+//       required: true,
+//     },
+//     amount: {
+//       type: Number,
+//       required: true,
+//     },
+//     paidTo: {
+//       type: String,
+//     },
+//     date: {
+//       type: Date,
+//       required: true,
+//     },
+//     paymentMethod: {
+//       type: String,
+//     },
+//     description: {
+//       type: String,
+//     },
+//     receiptUrl: {
+//       type: String,
+//     },
+//     // ✅ Associate with Clerk user
+//     userId: {
+//       type: String,
+//       required: true, // Clerk user ID (sub)
+//     },
+//     userEmail: {
+//       type: String,
+//       required: true, // Clerk email
+//     },
+//   },
+//   {
+//     timestamps: true, // createdAt and updatedAt
+//   }
+// );
+
+// module.exports = mongoose.model("Expense", ExpenseSchema);
+
 const mongoose = require("mongoose");
 
-const ExpenseSchema = new mongoose.Schema(
+const expenseSchema = new mongoose.Schema(
   {
-    gymId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Gym",
+    gymCode: {
+      type: String,
       required: true,
     },
-    category: {
+    expenseCategory: {
+      type: String,
+      required: true,
+    },
+    expenseDetail: {
       type: String,
       required: true,
     },
@@ -15,26 +68,29 @@ const ExpenseSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
-    paidTo: {
+    paymentMode: {
       type: String,
+      enum: ["Cash", "Card", "Online", "UPI", "Cheque"],
+      required: true,
     },
     date: {
       type: Date,
       required: true,
     },
-    paymentMethod: {
+    transactionId: {
       type: String,
+      default: "",
     },
     description: {
       type: String,
+      default: "",
     },
-    receiptUrl: {
-      type: String,
+    createdBy: {
+      type: String, // Clerk or Admin email
+      required: true,
     },
   },
-  {
-    timestamps: true, // ✅ Adds createdAt and updatedAt automatically
-  }
+  { timestamps: true }
 );
 
-module.exports = mongoose.model("Expense", ExpenseSchema);
+module.exports = mongoose.model("Expense", expenseSchema);

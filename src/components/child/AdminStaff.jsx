@@ -20,12 +20,20 @@ const StaffManagement = () => {
   const fetchStaff = async () => {
     try {
       const token = await getToken();
+      if (!token) return;
+
       const res = await axios.get(API_URL, {
         headers: { Authorization: `Bearer ${token}` },
       });
+
+      console.log("Fetched staff:", res.data);
       setStaffList(res.data);
     } catch (err) {
-      console.error("Failed to fetch staff:", err);
+      console.error("Failed to fetch staff:", {
+        message: err?.message,
+        status: err?.response?.status,
+        data: err?.response?.data,
+      });
     }
   };
 
@@ -66,9 +74,16 @@ const StaffManagement = () => {
   const handleSave = async () => {
     try {
       const token = await getToken();
-      const config = { headers: { Authorization: `Bearer ${token}` } };
+      if (!token) {
+        alert("No auth token found. Please login again.");
+        return;
+      }
 
-      // ✅ Send exactly what backend expects
+      const config = {
+        headers: { Authorization: `Bearer ${token}` },
+      };
+
+      // Prepare data exactly as backend expects
       const staffData = {
         name: editingStaff.name,
         email: editingStaff.email,
@@ -84,6 +99,8 @@ const StaffManagement = () => {
         ? await axios.put(`${API_URL}/${editingStaff._id}`, staffData, config)
         : await axios.post(API_URL, staffData, config);
 
+      console.log("Saved staff:", res.data);
+
       setStaffList((prev) =>
         editingStaff._id
           ? prev.map((s) => (s._id === res.data._id ? res.data : s))
@@ -92,10 +109,16 @@ const StaffManagement = () => {
 
       setShowModal(false);
     } catch (err) {
-      console.error("Failed to save staff:", err.response?.data || err);
+      console.error("Failed to save staff:", {
+        message: err?.message,
+        status: err?.response?.status,
+        data: err?.response?.data,
+      });
+      alert(
+        "Failed to save staff. Please check input and ensure you are logged in."
+      );
     }
   };
-
   const handleDelete = async (id) => {
     try {
       const token = await getToken();

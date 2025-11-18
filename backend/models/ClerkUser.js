@@ -1,40 +1,31 @@
 const mongoose = require("mongoose");
+// models/ClerkUser.js
+const ClerkUserSchema = new mongoose.Schema(
+  {
+    sub: { type: String, required: true, unique: true },
+    email: { type: String, default: "" },
+    first_name: { type: String, default: "" },
+    last_name: { type: String, default: "" },
+    fullName: { type: String, default: "" },
+    role: {
+      type: String,
+      enum: ["superadmin", "admin", "staff", "member", "trainer"],
+      default: "member",
+    },
+    phone: { type: String, default: "" },
+    imageUrl: { type: String, default: "" },
+    additionalInfo: { type: String, default: "" },
 
-const ClerkUserSchema = new mongoose.Schema({
-  sub: {
-    type: String,
-    required: true,
-    unique: true, // Clerk user ID (from token)
+    // ✅ Add this field
+    requestAdminAccess: { type: Boolean, default: false },
+
+    // ✅ Optional staff info fields
+    department: { type: String, default: "" },
+    position: { type: String, default: "" },
   },
-  email: {
-    type: String,
-    default: "",
-  },
-  first_name: {
-    type: String,
-    default: "",
-  },
-  last_name: {
-    type: String,
-    default: "",
-  },
-  fullName: {
-    type: String,
-    default: "",
-  },
-  role: {
-    type: String,
-    enum: ["admin", "trainer", "member", "superadmin"],
-    default: "member",
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now,
-  },
-});
+  { timestamps: true }
+);
+
+
 
 module.exports = mongoose.model("ClerkUser", ClerkUserSchema);

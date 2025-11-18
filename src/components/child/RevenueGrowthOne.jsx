@@ -1,5 +1,5 @@
 "use client";
-import useReactApexChart from "@/hook/useReactApexChart";
+import useReactApexChart from "../../hook/useReactApexChart";
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { useAuth, useUser } from "@clerk/nextjs";

@@ -1,66 +1,82 @@
-// backend/Routes/adminDashboard.js
 const express = require("express");
 const router = express.Router();
-// your custom auth
-const verifyClerkToken = require("../middleware/verifyClerkToken"); // Clerk auth
+
+// Clerk auth middleware
+const verifyClerkToken = require("../middleware/verifyClerkToken");
 
 const Member = require("../models/Member");
 const Trainer = require("../models/admintrainer");
 const Staff = require("../models/Staff");
 const Expense = require("../models/Expense");
 const Attendance = require("../models/Attendance");
-const mongoose = require("mongoose");
 
-// Middleware to support both auth methods
-const authMiddleware = async (req, res, next) => {
+// GET /api/admin/stats
+// Returns dashboard stats scoped to the logged-in user
+router.get("/stats", verifyClerkToken, async (req, res) => {
   try {
-    // Try Clerk token first
-    await verifyClerkToken(req, res, async () => {
-      next();
+    console.log("🔹 Incoming request to /stats");
+    console.log("🔹 req.clerkUser:", req.clerkUser);
+
+    const userEmail = req.clerkUser?.email;
+    if (!userEmail) {
+      return res
+        .status(400)
+        .json({ error: "Missing userEmail from Clerk token" });
+    }
+
+    // ✅ Count Members
+    const membersCount = await Member.countDocuments({
+      userEmail,
+      isDeleted: false,
     });
-  } catch (err) {
-    // If Clerk fails, try custom token
-    verifyToken(req, res, next);
-  }
-};
 
-// GET /api/admin/stats?gymId=<gymId>
-router.get("/stats", authMiddleware, async (req, res) => {
-  try {
-    const { gymId } = req.query;
-    if (!gymId) return res.status(400).json({ error: "Missing gymId" });
+    // ✅ Count Trainers
+    const trainersCount = await Trainer.countDocuments({ userEmail });
 
-    const objectGymId = new mongoose.Types.ObjectId(gymId); // ✅ convert string to ObjectId
+    // ✅ Count Staff
+    const staffCount = await Staff.countDocuments({ userEmail });
 
-    // Count documents
-    const membersCount = await Member.countDocuments({ gymId: objectGymId });
-    const trainersCount = await Trainer.countDocuments({ gymId: objectGymId });
-    const staffCount = await Staff.countDocuments({ gymId: objectGymId });
-
-    // Total expenses
-    const expensesTotal = await Expense.aggregate([
-      { $match: { gymId: objectGymId } },
+    // ✅ Total Expenses
+    const expensesTotalAgg = await Expense.aggregate([
+      { $match: { userEmail } },
       { $group: { _id: null, total: { $sum: "$amount" } } },
     ]);
+    const expensesTotal = expensesTotalAgg[0]?.total || 0;
 
-    // Check-ins
+    // ✅ Attendance check-ins for today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+
     const memberCheckins = await Attendance.countDocuments({
-      gymId: objectGymId,
+      userEmail,
       category: "Member",
       status: "Check-in",
+      createdAt: { $gte: today, $lt: tomorrow },
     });
 
     const staffTrainerCheckins = await Attendance.countDocuments({
-      gymId: objectGymId,
+      userEmail,
       category: { $in: ["Staff", "Trainer"] },
       status: "Check-in",
+      createdAt: { $gte: today, $lt: tomorrow },
+    });
+
+    console.log("✅ Returning stats:", {
+      membersCount,
+      trainersCount,
+      staffCount,
+      expensesTotal,
+      memberCheckins,
+      staffTrainerCheckins,
     });
 
     res.json({
       members: membersCount,
       trainers: trainersCount,
       staff: staffCount,
-      expenses: expensesTotal[0]?.total || 0,
+      expenses: expensesTotal,
       memberCheckins,
       staffTrainerAttendance: staffTrainerCheckins,
     });

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { Modal, Button, Form, Table, Row, Col, Badge } from "react-bootstrap";
-import { Edit, Trash2, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { useAuth, useUser } from "@clerk/nextjs";
@@ -20,29 +20,25 @@ const MemberAttendance = () => {
   const [formData, setFormData] = useState({
     category: "Member",
     status: "Check-in",
-    ownerClerkId: "",
     personId: "",
   });
-
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [editingId, setEditingId] = useState(null);
   const [trainers, setTrainers] = useState([]);
   const [staff, setStaff] = useState([]);
   const [members, setMembers] = useState([]);
   const [category, setCategory] = useState("Member");
-  const [attendance, setAttendance] = useState([]); // ✅ Fixed: no prop, just state
+  const [attendance, setAttendance] = useState([]);
 
+  // Fetch GymId
   const fetchGymId = async (token) => {
     const role =
       user?.publicMetadata?.role || user?.unsafeMetadata?.role || "member";
-
     const gymUrl =
       role === "superadmin" ? `${API}/api/gyms` : `${API}/api/gyms/my`;
-
     const res = await axios.get(gymUrl, {
       headers: { Authorization: `Bearer ${token}` },
     });
-
     const gyms = Array.isArray(res.data) ? res.data : res.data.gyms || [];
     return gyms[0]?._id || "";
   };
@@ -52,41 +48,26 @@ const MemberAttendance = () => {
       if (!user) return;
       const token = await getToken();
       const id = await fetchGymId(token);
-      console.log("🏋️‍♂️ Set gymId:", id);
       setGymId(id);
     };
     init();
   }, [user]);
 
-  // useEffect(() => {
-  //   if (user && !editingId) {
-  //     setFormData((prev) => ({
-  //       ...prev,
-  //       ownerClerkId: user.id,
-  //     }));
-  //   }
-  // }, [user, editingId]);
-
+  // Fetch Attendance for logged-in user
+  // fetch attendance for logged-in user
   const fetchAttendance = async () => {
+    if (!gymId || !user) return;
+
     try {
       const token = await getToken();
       const formattedDate = selectedDate.toISOString().split("T")[0];
-      console.log("📤 Sending attendance fetch request with:", {
-        gymId,
-        date: formattedDate,
+
+      const res = await axios.get(`${API}/api/admin/attendance/my`, {
+        // ✅ match backend mount
+        params: { gymId, date: formattedDate },
+        headers: { Authorization: `Bearer ${token}` },
       });
 
-      const res = await axios.get(`${API}/api/admin/attendance`, {
-        params: {
-          gymId,
-          date: formattedDate,
-        },
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      console.log("📅 Attendance fetched:", res.data);
       setAttendance(res.data);
     } catch (err) {
       console.error("❌ Failed to fetch attendance:", err);
@@ -94,68 +75,80 @@ const MemberAttendance = () => {
   };
 
   useEffect(() => {
-    if (gymId) {
-      console.log("👀 Fetching attendance for gymId:", gymId);
-      fetchAttendance();
-    }
+    fetchAttendance();
   }, [selectedDate, gymId]);
+
+  // Fetch people list for modal
+  const getPeopleList = async () => {
+    if (!gymId) return;
+    try {
+      const token = await getToken();
+      let endpoint = "";
+      let setter = null;
+      if (category === "Member") {
+        endpoint = `${API}/api/members`;
+        setter = setMembers;
+      } else if (category === "Trainer") {
+        endpoint = `${API}/api/admintrainers`;
+        setter = setTrainers;
+      } else {
+        endpoint = `${API}/api/adminstaff`;
+        setter = setStaff;
+      }
+
+      const res = await axios.get(endpoint, {
+        params: { gymId },
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!Array.isArray(res.data)) return setPeopleList([]);
+      setPeopleList(res.data);
+      setter(res.data);
+    } catch (err) {
+      console.error("❌ Error fetching people:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (showModal && category) getPeopleList();
+  }, [showModal, category]);
+
+  // Submit attendance
+  // handle submit for logged-in user
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!gymId || !user) return;
+
     const token = await getToken();
-
-    const category = formData.category || "";
-    const status = formData.status || "";
-    const userId = formData.personId || ""; // ✅ map personId to userId
-    const ownerClerkId = formData.ownerClerkId || "";
-
     const date = selectedDate.toISOString().split("T")[0];
 
-    if (!userId || !category || !status || !date || !gymId) {
-      console.error("❌ Missing required fields:", {
-        userId,
-        category,
-        status,
-        date,
-        gymId,
-      });
-      return;
-    }
-
     const payload = {
-      userId, // ✅ backend expects userId
-      category,
-      status,
+      userId: user.id, // optional: backend uses token, so can omit
+      category: formData.category,
+      status: formData.status,
       date,
       gymId,
-      ownerClerkId,
     };
-
-    console.log("📦 Final payload to submit:", payload);
 
     try {
       if (editingId) {
         await axios.put(`${API}/api/admin/attendance/${editingId}`, payload, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        console.log("📝 Updated existing attendance entry.");
       } else {
         await axios.post(`${API}/api/admin/attendance`, payload, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        console.log("✅ Attendance created successfully.");
       }
 
-      await fetchAttendance(); // refresh attendance
       setShowModal(false);
-      setFormData({
-        category: "Member",
-        status: "Check-in",
-        personId: "",
-        ownerClerkId: "",
-      });
+      setFormData({ category: "Member", status: "Check-in", personId: "" });
       setEditingId(null);
+      fetchAttendance(); // refresh
     } catch (err) {
-      console.error("❌ Error submitting:", err?.response?.data || err.message);
+      console.error(
+        "❌ Error submitting attendance:",
+        err?.response?.data || err.message
+      );
     }
   };
 
@@ -164,10 +157,8 @@ const MemberAttendance = () => {
     setFormData({
       category: entry.category,
       status: entry.status,
-      ownerClerkId: entry.ownerClerkId || "",
-      personId: entry.personId || "",
+      personId: "",
     });
-
     setCategory(entry.category);
     setShowModal(true);
   };
@@ -175,106 +166,17 @@ const MemberAttendance = () => {
   const handleDelete = async (id) => {
     const token = await getToken();
     try {
-      await axios.delete(`${API}/api/admin/attendance/${id}`, {
+      await axios.delete(`${API}/api/attendance/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       fetchAttendance();
     } catch (err) {
-      console.error("Error deleting attendance", err);
-    }
-  };
-  const getPeopleList = async () => {
-    console.log("🔁 getPeopleList called for category:", category);
-
-    const token = await getToken();
-    const headers = { Authorization: `Bearer ${token}` };
-
-    try {
-      let endpoint = "";
-      let updateList = null;
-
-      if (category === "Member") {
-        endpoint = `${API}/api/members`;
-        updateList = setMembers;
-      } else if (category === "Trainer") {
-        endpoint = `${API}/api/admintrainers`;
-        updateList = setTrainers;
-      } else if (category === "Staff") {
-        endpoint = `${API}/api/adminstaff`;
-        updateList = setStaff;
-      }
-
-      console.log("🌐 Requesting people list:", {
-        category,
-        url: endpoint,
-        params: { gymId },
-      });
-
-      const res = await axios.get(endpoint, {
-        params: { gymId },
-        headers,
-      });
-
-      if (!Array.isArray(res.data)) {
-        console.error("❗ Expected array but got:", res.data);
-        setPeopleList([]);
-        return;
-      }
-
-      res.data.forEach((person, i) => {
-        console.log(`👤 ${category} ${i + 1}:`, {
-          id: person._id,
-          fullname: person.fullname || person.name,
-          ownerClerkId: person.ownerClerkId,
-        });
-      });
-
-      setPeopleList(res.data);
-      updateList?.(res.data); // 🟢 update respective global list too
-    } catch (error) {
-      console.error("❌ Error fetching people list:", error);
+      console.error("❌ Failed to delete attendance:", err);
     }
   };
 
-  useEffect(() => {
-    if (showModal && category && gymId) {
-      getPeopleList();
-    }
-  }, [showModal, category, gymId]);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const token = await getToken();
-
-        const memberRes = await axios.get(`${API}/api/members`, {
-          params: { gymId },
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        const trainerRes = await axios.get(`${API}/api/admintrainers`, {
-          params: { gymId },
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        const staffRes = await axios.get(`${API}/api/adminstaff`, {
-          params: { gymId },
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        setMembers(memberRes.data);
-        setTrainers(trainerRes.data);
-        setStaff(staffRes.data);
-      } catch (error) {
-        console.error("❌ Fetching Error:", error);
-      }
-    };
-
-    if (gymId) {
-      fetchData();
-    }
-  }, [gymId]);
   const getUserName = (entry) => {
+    // Decide which array to look in
     const people =
       entry.category === "Trainer"
         ? trainers
@@ -282,22 +184,22 @@ const MemberAttendance = () => {
         ? staff
         : members;
 
+    // If array is empty, show placeholder
     if (!people || people.length === 0) return "Loading...";
 
-    const normalizedUserId = entry.userId?.toString(); // ✅ use userId
-    const match = people.find((p) => p._id.toString() === normalizedUserId);
+    // Normalize IDs for comparison
+    const userIdStr = entry.userId?.toString();
 
-    if (!match) {
-      console.warn("⚠️ Person not found for entry:", entry);
-      return "Unknown";
-    }
+    // Find the person
+    const match = people.find((p) => p._id?.toString() === userIdStr);
 
-    // Return name based on schema
+    // Return proper name or fallback
+    if (!match) return "Unknown";
+
+    // Members use 'fullname', Trainers/Staff might use 'name'
     if (entry.category === "Member") return match.fullname || "Unknown";
-    return match.name || "Unknown"; // Trainers and Staff use 'name'
+    return match.name || "Unknown";
   };
-
-  console.log("🧾 Selected ownerClerkId:", formData.ownerClerkId);
 
   return (
     <div className="container">
@@ -312,7 +214,7 @@ const MemberAttendance = () => {
         <Col md={4}>
           <DatePicker
             selected={selectedDate}
-            onChange={(date) => setSelectedDate(date)}
+            onChange={setSelectedDate}
             className="form-control"
           />
         </Col>
@@ -329,26 +231,18 @@ const MemberAttendance = () => {
             <th>Actions</th>
           </tr>
         </thead>
-
         <tbody>
-          {attendance?.length === 0 ? (
+          {attendance.length === 0 ? (
             <tr>
               <td colSpan="6" className="text-center">
                 No records found.
               </td>
             </tr>
           ) : (
-            attendance.map((entry, index) => (
+            attendance.map((entry, idx) => (
               <tr key={entry._id}>
-                <td>{index + 1}</td>
-                <td>
-                  {entry.userId ? (
-                    getUserName(entry)
-                  ) : (
-                    <span className="text-muted">N/A</span>
-                  )}
-                </td>
-
+                <td>{idx + 1}</td>
+                <td>{getUserName(entry)}</td>
                 <td>{entry.category}</td>
                 <td>
                   <Badge
@@ -363,7 +257,7 @@ const MemberAttendance = () => {
                     {entry.status}
                   </Badge>
                 </td>
-                <td>{new Date(entry.time).toLocaleTimeString()}</td>
+                <td>{entry.date}</td>
                 <td>
                   <div className="d-flex gap-2">
                     <Button
@@ -403,14 +297,9 @@ const MemberAttendance = () => {
                   <Form.Select
                     value={formData.category}
                     onChange={(e) => {
-                      const selectedCategory = e.target.value;
-                      setCategory(selectedCategory);
-                      setFormData({
-                        ...formData,
-                        category: selectedCategory,
-                        personId: "",
-                        ownerClerkId: "",
-                      });
+                      const cat = e.target.value;
+                      setCategory(cat);
+                      setFormData({ ...formData, category: cat, personId: "" });
                     }}
                   >
                     <option>Member</option>
@@ -424,32 +313,16 @@ const MemberAttendance = () => {
                   <Form.Label>Select Name</Form.Label>
                   <Form.Select
                     value={formData.personId}
-                    onChange={(e) => {
-                      const selectedId = e.target.value;
-                      if (!selectedId) return;
-
-                      const person = peopleList.find(
-                        (p) => p._id === selectedId
-                      );
-                      if (!person) return;
-
-                      setFormData((prev) => ({
-                        ...prev,
-                        personId: selectedId,
-                        ownerClerkId: person.ownerClerkId || "",
-                      }));
-                    }}
+                    onChange={(e) =>
+                      setFormData({ ...formData, personId: e.target.value })
+                    }
                   >
                     <option value="">-- Select --</option>
-                    {peopleList.map((person, i) => {
-                      const value = person._id;
-                      const label = person.fullname || person.name || "Unnamed";
-                      return (
-                        <option key={`${value}_${i}`} value={value}>
-                          {label}
-                        </option>
-                      );
-                    })}
+                    {peopleList.map((p, i) => (
+                      <option key={`${p._id}_${i}`} value={p._id}>
+                        {p.fullname || p.name || "Unnamed"}
+                      </option>
+                    ))}
                   </Form.Select>
                 </Form.Group>
               </Col>

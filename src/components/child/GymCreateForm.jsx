@@ -50,7 +50,7 @@ export default function GymCreateForm() {
     const boot = async () => {
       if (!isLoaded) return;
       if (!isSignedIn) {
-        router.push("/sign-in");
+        router.push("/");
         return;
       }
       const t = await getToken({ template: JWT_TEMPLATE });

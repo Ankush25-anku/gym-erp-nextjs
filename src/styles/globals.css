@@ -11,3 +11,88 @@
   padding: 1rem;
   border-radius: 8px;
 }
+/* Sidebar Container */
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+  z-index: 998;
+}
+
+/* Active Overlay */
+.overlay.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Sidebar Base */
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: -250px; /* hidden by default */
+  width: 250px;
+  height: 100vh;
+  background: #fff;
+  border-right: 1px solid #eaeaea;
+  overflow-y: auto;
+  transition: left 0.3s ease-in-out;
+  z-index: 999;
+  box-shadow: none;
+}
+
+/* Sidebar Open (Mobile) */
+.sidebar.sidebar-open {
+  left: 0;
+  box-shadow: 3px 0 10px rgba(0, 0, 0, 0.15);
+}
+
+/* Sidebar Active (Desktop fixed) */
+.sidebar.active {
+  left: 0;
+}
+
+/* Close Button */
+.sidebar-close-btn {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  background: transparent;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+  color: #444;
+  z-index: 1000;
+}
+
+/* Sidebar Transition for content (optional fade effect) */
+.sidebar-menu li {
+  opacity: 0;
+  transform: translateX(-10px);
+  animation: fadeInLinks 0.4s ease forwards;
+}
+@keyframes fadeInLinks {
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Hide close button on desktop */
+@media (min-width: 992px) {
+  .sidebar-close-btn {
+    display: none;
+  }
+  .overlay {
+    display: none;
+  }
+  .sidebar {
+    left: 0 !important;
+    box-shadow: none;
+  }
+}

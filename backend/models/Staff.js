@@ -9,11 +9,13 @@ const staffSchema = new mongoose.Schema(
     email: String,
     phone: String,
     position: String,
-   status: {
-  type: String,
-  enum: ["Present", "Absent"], // Capitalized to match your route checks
-  required: true,
-},
+    status: {
+      type: String,
+      enum: ["Present", "Absent"], // Capitalized to match your route checks
+      required: true,
+    },
+
+    userId: { type: String, required: true },
 
     joinedDate: {
       type: Date,

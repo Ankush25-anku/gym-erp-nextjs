@@ -297,7 +297,7 @@ router.post("/", verifyClerkToken, async (req, res) => {
       health: req.body.health || {},
       gymId: req.body.gymId || null,
 
-      createdBy: clerkUser.sub, // ✅ Use Clerk user ID
+      userId: clerkUser.sub, // ✅ Use Clerk user ID
       userEmail: clerkUser.email, // ✅ Use Clerk email
     });
 
@@ -317,7 +317,7 @@ router.get("/", verifyClerkToken, async (req, res) => {
     const { gymId } = req.query;
     const { clerkUser } = req;
 
-    const filter = { createdBy: clerkUser.sub };
+    const filter = { userId: clerkUser.sub };
 
     if (gymId && gymId !== "all") {
       if (mongoose.Types.ObjectId.isValid(gymId)) {
@@ -374,7 +374,7 @@ router.put("/:id", verifyClerkToken, async (req, res) => {
     }
 
     const updated = await Member.findOneAndUpdate(
-      { _id: memberId, createdBy: clerkUser.sub },
+      { _id: memberId, userId: clerkUser.sub },
       {
         fullname,
         email,
@@ -419,7 +419,7 @@ router.delete("/:id", verifyClerkToken, async (req, res) => {
 
     const deleted = await Member.findOneAndDelete({
       _id: id,
-      createdBy: clerkUser.sub,
+      userId: clerkUser.sub,
     });
     if (!deleted) {
       return res
@@ -518,5 +518,3 @@ router.get("/revenue/breakdown", verifyClerkToken, async (req, res) => {
 });
 
 module.exports = router;
-
-

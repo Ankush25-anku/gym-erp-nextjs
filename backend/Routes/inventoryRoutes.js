@@ -1,97 +1,110 @@
 const express = require("express");
-const router = express.Router();
 const Inventory = require("../models/Inventory");
-const mongoose = require("mongoose");
+const GymApproval = require("../models/GymApproval");
 
-// GET all items for a gym (filter by isDeleted)
-router.get("/", async (req, res) => {
+const router = express.Router();
+
+// =============================
+// GET ITEMS BY GYM CODE
+// =============================
+router.get("/by-gym", async (req, res) => {
   try {
-    const { gymId, isDeleted } = req.query;
-    if (!gymId) return res.status(400).json({ error: "Missing gymId" });
+    const { gymCode } = req.query;
 
-    const filter = { gymId: gymId };
-    if (isDeleted !== undefined) filter.isDeleted = isDeleted === "true";
+    if (!gymCode) {
+      return res.status(400).json({
+        success: false,
+        message: "gymCode is required",
+      });
+    }
 
-    const items = await Inventory.find(filter).sort({ createdAt: -1 });
-    res.json(items);
-  } catch (err) {
-    console.error("❌ Failed to fetch inventory:", err);
-    res.status(500).json({ error: "Failed to fetch inventory" });
+    // Validate approved gym
+    const gym = await GymApproval.findOne({ gymCode, status: "approved" });
+    if (!gym) {
+      return res.status(404).json({
+        success: false,
+        message: "Invalid or unapproved gymCode",
+      });
+    }
+
+    const items = await Inventory.find({ gymCode });
+    res.json({ success: true, items });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 });
 
-// POST add new item
+// =============================
+// ADD INVENTORY ITEM
+// =============================
 router.post("/", async (req, res) => {
   try {
-    let { gymId, itemName, quantity, status, notes, isDeleted } = req.body;
+    const { gymCode } = req.body;
 
-    if (!gymId || !itemName || quantity === undefined || !status) {
-      return res
-        .status(400)
-        .json({ error: "All required fields must be filled" });
+    if (!gymCode) {
+      return res.status(400).json({
+        success: false,
+        message: "gymCode is required",
+      });
     }
 
-    if (!mongoose.Types.ObjectId.isValid(gymId)) {
-      return res.status(400).json({ error: "Invalid gymId" });
+    // Validate gymCode
+    const gym = await GymApproval.findOne({ gymCode, status: "approved" });
+    if (!gym) {
+      return res.status(404).json({
+        success: false,
+        message: "Invalid gymCode",
+      });
     }
 
-    const newItem = new Inventory({
-      gymId,
-      itemName,
-      quantity,
-      status,
-      notes,
-      isDeleted: isDeleted || false,
+    const item = await Inventory.create(req.body);
+
+    res.json({ success: true, message: "Item added", item });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
     });
-
-    const saved = await newItem.save();
-    res.status(201).json(saved);
-  } catch (err) {
-    console.error("❌ Error saving inventory:", err);
-    res.status(500).json({ error: "Failed to save inventory item" });
   }
 });
 
-// PUT update item (also handles soft delete)
+// =============================
+// UPDATE ITEM
+// =============================
 router.put("/:id", async (req, res) => {
   try {
-    const { gymId, itemName, quantity, status, notes, isDeleted } = req.body;
+    const item = await Inventory.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+    });
 
-    const updateData = {};
-    if (gymId) updateData.gymId = gymId;
-    if (itemName !== undefined) updateData.itemName = itemName;
-    if (quantity !== undefined) updateData.quantity = quantity;
-    if (status !== undefined) updateData.status = status;
-    if (notes !== undefined) updateData.notes = notes;
-    if (isDeleted !== undefined) updateData.isDeleted = isDeleted;
-
-    const updated = await Inventory.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      {
-        new: true,
-      }
-    );
-
-    if (!updated) return res.status(404).json({ error: "Item not found" });
-
-    res.json(updated);
-  } catch (err) {
-    console.error("❌ Failed to update inventory:", err);
-    res.status(500).json({ error: "Failed to update item" });
+    res.json({ success: true, message: "Item updated", item });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 });
 
-// DELETE permanently remove item (only if you want hard delete)
+// =============================
+// DELETE ITEM
+// =============================
 router.delete("/:id", async (req, res) => {
   try {
-    const deleted = await Inventory.findByIdAndDelete(req.params.id);
-    if (!deleted) return res.status(404).json({ error: "Item not found" });
+    await Inventory.findByIdAndDelete(req.params.id);
 
-    res.json({ message: "Item permanently deleted" });
-  } catch (err) {
-    console.error("❌ Failed to delete inventory:", err);
-    res.status(500).json({ error: "Failed to delete item" });
+    res.json({
+      success: true,
+      message: "Item deleted successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 });
 

@@ -1,15 +1,14 @@
-'use client';
+"use client";
 
-import { useAuth } from "@clerk/nextjs";
-import { UserButton } from "@clerk/nextjs";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 export default function HomePage() {
-  const { userId } = useAuth();
+  const router = useRouter();
 
-  return (
-    <div>
-      <h1>Welcome, User ID: {userId}</h1>
-      <UserButton afterSignOutUrl="/login" />
-    </div>
-  );
+  useEffect(() => {
+    router.replace("/after-signup"); // instantly redirect to after-signup
+  }, [router]);
+
+  return null; // nothing will render — instant redirect
 }
