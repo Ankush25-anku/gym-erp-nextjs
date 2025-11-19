@@ -6,15 +6,25 @@ import axios from "axios";
 // Helper to format date nicely
 const formatDate = (dateString) => {
   const date = new Date(dateString);
-  const options = { weekday: "long", year: "numeric", month: "long", day: "numeric" };
+  const options = {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  };
   return date.toLocaleDateString("en-US", options);
 };
 
 const UnitCountSeven = () => {
   // ✅ Load date from localStorage or default
-  const [selectedDate, setSelectedDate] = useState(() => {
-    return localStorage.getItem("selectedDate") || "2025-06-19";
-  });
+  const [selectedDate, setSelectedDate] = useState("2025-06-19");
+
+  useEffect(() => {
+    const storedDate = localStorage.getItem("selectedDate");
+    if (storedDate) {
+      setSelectedDate(storedDate);
+    }
+  }, []);
 
   const [events, setEvents] = useState([]);
 
@@ -27,7 +37,9 @@ const UnitCountSeven = () => {
   useEffect(() => {
     const fetchEvents = async () => {
       try {
-        const response = await axios.get(`http://localhost:5000/api/events?date=${selectedDate}`);
+        const response = await axios.get(
+          `http://localhost:5000/api/events?date=${selectedDate}`
+        );
         setEvents(response.data);
       } catch (error) {
         console.error("Failed to fetch events:", error);
@@ -39,8 +51,8 @@ const UnitCountSeven = () => {
   }, [selectedDate]);
 
   const totalEvents = events.length;
-  const classes = events.filter(e => e.type === "class").length;
-  const ptSessions = events.filter(e => e.type === "pt").length;
+  const classes = events.filter((e) => e.type === "class").length;
+  const ptSessions = events.filter((e) => e.type === "pt").length;
 
   const cardStyle = {
     minHeight: "130px",
@@ -73,7 +85,9 @@ const UnitCountSeven = () => {
         <div className="col-md-3 col-sm-6">
           <div style={cardStyle}>
             <div style={{ width: "100%" }}>
-              <span className="text-muted fw-medium d-block mb-2">Select Date</span>
+              <span className="text-muted fw-medium d-block mb-2">
+                Select Date
+              </span>
               <div className="d-flex align-items-center gap-2">
                 <input
                   type="date"
@@ -140,7 +154,9 @@ const UnitCountSeven = () => {
             <div className="d-flex flex-column align-items-center mt-4">
               <i className="ri-calendar-line text-secondary fs-1 mb-2"></i>
               <h6 className="fw-semibold">No events scheduled</h6>
-              <p className="text-muted mb-0">No events found for the selected date.</p>
+              <p className="text-muted mb-0">
+                No events found for the selected date.
+              </p>
             </div>
           ) : (
             <ul className="list-group text-start">
