@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
-import MasterLayout from "@/masterLayout/MasterLayout";
+import MasterLayout from "../../../masterLayout/MasterLayout";
 import "bootstrap-icons/font/bootstrap-icons.css";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";

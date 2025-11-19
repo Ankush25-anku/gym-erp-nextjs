@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import MasterLayout from "@/masterLayout/MasterLayout";
+import MasterLayout from "../../../masterLayout/MasterLayout";
 import { format } from "date-fns";
 
 export default function TrainerSchedulePage() {
