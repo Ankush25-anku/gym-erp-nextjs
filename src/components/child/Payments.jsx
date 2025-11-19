@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { Button, Modal, Form } from "react-bootstrap";
-import MasterLayout from "@/masterLayout/MasterLayout";
+import MasterLayout from "../../masterLayout/MasterLayout";
 import { useAuth, useUser } from "@clerk/nextjs";
 
 const API = `${process.env.NEXT_PUBLIC_API_URL}/api/payments`;

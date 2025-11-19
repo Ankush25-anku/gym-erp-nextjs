@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import Payments from "@/components/child/Payments";
+import Payments from "../../components/child/Payments";
 
 const PaymentsPage = () => {
   return <Payments />;

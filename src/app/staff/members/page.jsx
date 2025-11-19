@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Edit, Plus } from "lucide-react";
-import MasterLayout from "@/masterLayout/MasterLayout";
+import MasterLayout from "../../../masterLayout/MasterLayout";
 import axios from "axios";
 import "bootstrap-icons/font/bootstrap-icons.css";
 

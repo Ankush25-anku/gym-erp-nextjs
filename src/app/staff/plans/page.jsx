@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Edit, Plus, Trash, Users } from "lucide-react";
-import MasterLayout from "@/masterLayout/MasterLayout";
+import MasterLayout from "../../../masterLayout/MasterLayout";
 import axios from "axios";
 import "bootstrap-icons/font/bootstrap-icons.css";
 
@@ -105,7 +105,9 @@ export default function PlansPage() {
     <MasterLayout>
       <div className="container mt-4">
         <h2 className="fw-bold">Subscription Plans</h2>
-        <p className="text-muted mb-4">Manage membership plans, pricing, and features</p>
+        <p className="text-muted mb-4">
+          Manage membership plans, pricing, and features
+        </p>
 
         {/* Search & Add */}
         <div className="d-flex align-items-center gap-2 mb-4 flex-wrap">
@@ -128,7 +130,9 @@ export default function PlansPage() {
             <div className="col-md-3 mb-4" key={plan._id}>
               <div
                 className={`card h-100 border-2 ${
-                  plan.tag === "Most Popular" ? "border-primary" : "border-light"
+                  plan.tag === "Most Popular"
+                    ? "border-primary"
+                    : "border-light"
                 }`}
               >
                 <div className="card-body d-flex flex-column position-relative">
@@ -144,11 +148,15 @@ export default function PlansPage() {
                     {plan.price}
                     <small className="text-muted"> /{plan.billing}</small>
                   </h3>
-                  <div className="text-center text-muted mb-3">{plan.duration}</div>
+                  <div className="text-center text-muted mb-3">
+                    {plan.duration}
+                  </div>
 
                   <ul className="list-unstyled small mb-3">
                     {plan.features.map((feat, i) => (
-                      <li key={i} className="mb-1 text-success">✔ {feat}</li>
+                      <li key={i} className="mb-1 text-success">
+                        ✔ {feat}
+                      </li>
                     ))}
                   </ul>
 
@@ -159,7 +167,11 @@ export default function PlansPage() {
                       {plan.members}
                     </span>
                     <span
-                      className={`badge bg-${plan.status === "active" ? "success" : "secondary"}-subtle text-${plan.status === "active" ? "success" : "secondary"}`}
+                      className={`badge bg-${
+                        plan.status === "active" ? "success" : "secondary"
+                      }-subtle text-${
+                        plan.status === "active" ? "success" : "secondary"
+                      }`}
                     >
                       {plan.status}
                     </span>
@@ -198,10 +210,13 @@ export default function PlansPage() {
                   <div className="text-muted small">Total Revenue</div>
                   <div className="fw-bold fs-5">
                     $
-                    {plans.reduce(
-                      (acc, p) => acc + parseFloat(p.price || 0) * (p.members || 0),
-                      0
-                    ).toFixed(2)}
+                    {plans
+                      .reduce(
+                        (acc, p) =>
+                          acc + parseFloat(p.price || 0) * (p.members || 0),
+                        0
+                      )
+                      .toFixed(2)}
                   </div>
                 </div>
               </div>

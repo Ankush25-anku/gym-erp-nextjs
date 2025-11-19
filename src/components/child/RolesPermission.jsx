@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { Button, Modal, Form } from "react-bootstrap";
 import axios from "axios";
-import MasterLayout from "@/masterLayout/MasterLayout";
+import MasterLayout from "../../masterLayout/MasterLayout";
 import { useAuth, useUser } from "@clerk/nextjs";
 
 const API = `${process.env.NEXT_PUBLIC_API_URL}/api/roles-permissions`;
