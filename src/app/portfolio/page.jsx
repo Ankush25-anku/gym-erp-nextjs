@@ -1,6 +1,6 @@
-import Breadcrumb from "@/components/Breadcrumb";
-import PortfolioLayer from "@/components/PortfolioLayer";
-import MasterLayout from "@/masterLayout/MasterLayout";
+
+import PortfolioLayer from "../../components/PortfolioLayer";
+import MasterLayout from "../../masterLayout/MasterLayout";
 
 export const metadata = {
   title: "WowDash NEXT JS - Admin Dashboard Multipurpose Bootstrap 5 Template",
@@ -14,7 +14,7 @@ const Page = () => {
       {/* MasterLayout */}
       <MasterLayout>
         {/* Breadcrumb */}
-        <Breadcrumb title='Portfolio' />
+
 
         {/* PortfolioLayer */}
         <PortfolioLayer />
