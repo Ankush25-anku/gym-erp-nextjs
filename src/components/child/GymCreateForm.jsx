@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
-import MasterLayout from "@/masterLayout/MasterLayout";
+import MasterLayout from "../../masterLayout/MasterLayout";
 import { Button, Modal, Form } from "react-bootstrap";
 import { BsTrash, BsPencilSquare } from "react-icons/bs";
 import { useAuth, useUser } from "@clerk/nextjs";
