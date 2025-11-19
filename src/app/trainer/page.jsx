@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import MasterLayout from "@/masterLayout/MasterLayout";
+import MasterLayout from "../../masterLayout/MasterLayout";
 import { Icon } from "@iconify/react";
 import Link from "next/link";
 

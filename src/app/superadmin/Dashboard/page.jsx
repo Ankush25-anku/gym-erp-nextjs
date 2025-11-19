@@ -4,8 +4,8 @@ import React, { useState, useEffect } from "react";
 import { Icon } from "@iconify/react";
 import axios from "axios";
 import dynamic from "next/dynamic";
-import useReactApexChart from "@/hook/useReactApexChart";
-import MasterLayout from "../../masterLayout/MasterLayout";
+import useReactApexChart from "../../../hook/useReactApexChart";
+import MasterLayout from "../../../masterLayout/MasterLayout";
 import { useUser, useAuth } from "@clerk/nextjs";
 
 const ReactApexChart = dynamic(() => import("react-apexcharts"), {

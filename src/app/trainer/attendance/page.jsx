@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
-import MasterLayout from "@/masterLayout/MasterLayout";
+import MasterLayout from "../../../masterLayout/MasterLayout";
 import { Dropdown, Modal, Button, Form } from "react-bootstrap";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";

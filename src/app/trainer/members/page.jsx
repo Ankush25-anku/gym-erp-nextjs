@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import MasterLayout from "@/masterLayout/MasterLayout";
+import MasterLayout from "../../../masterLayout/MasterLayout";
 import axios from "axios";
 import { Modal, Button, Form } from "react-bootstrap";
 import "bootstrap-icons/font/bootstrap-icons.css";
