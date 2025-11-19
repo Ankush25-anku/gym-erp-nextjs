@@ -191,13 +191,14 @@ const app = express();
 const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:3001",
-  "https://your-frontend.vercel.app", // Add deployed frontend URL
+  "https://gym-erp-nextjs.vercel.app", // ✅ YOUR EXACT FRONTEND URL
+  "https://*.vercel.app", // 🔥 Allow all vercel preview URLs
 ];
 
 app.use(
   cors({
     origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (!origin || allowedOrigins.some((url) => origin.includes(url))) {
         callback(null, true);
       } else {
         callback(new Error("Not allowed by CORS: " + origin));
@@ -297,12 +298,9 @@ function mountRoutes() {
     require("./Routes/staffSalaryCategoryRoutes")
   );
 
-app.use("/api", require("./Routes/payslip"));
+  app.use("/api", require("./Routes/payslip"));
 
-app.use("/api/inventory", require("./Routes/inventoryRoutes"));
-
-
-
+  app.use("/api/inventory", require("./Routes/inventoryRoutes"));
 
   app.use("/api/supergyms", require("./Routes/superGymRoutes"));
   // 🧩 Gym Approval Routes
