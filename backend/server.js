@@ -191,22 +191,30 @@ const app = express();
 const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:3001",
-  "https://gym-erp-nextjs.vercel.app", // ✅ YOUR EXACT FRONTEND URL
-  "https://*.vercel.app", // 🔥 Allow all vercel preview URLs
+  "https://gym-erp-nextjs.vercel.app",   // your exact frontend domain
 ];
+
+// Enable wildcard for Vercel preview deployments
+const vercelWildcard = /\.vercel\.app$/;
 
 app.use(
   cors({
     origin: function (origin, callback) {
-      if (!origin || allowedOrigins.some((url) => origin.includes(url))) {
+      if (
+        !origin || 
+        allowedOrigins.includes(origin) ||
+        vercelWildcard.test(origin)
+      ) {
         callback(null, true);
       } else {
+        console.log("❌ BLOCKED ORIGIN:", origin);
         callback(new Error("Not allowed by CORS: " + origin));
       }
     },
     credentials: true,
   })
 );
+
 
 app.use(express.json());
 
