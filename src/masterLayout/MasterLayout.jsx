@@ -10,7 +10,7 @@ import { useUser, useAuth } from "@clerk/nextjs";
 import axios from "axios"; // ✅ make sure axios is imported
 
 const API_BASE = "http://localhost:5000";
-const MasterLayout = ({ children }) => {
+const   MasterLayout = ({ children }) => {
   const pathname = usePathname();
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [sidebarActive, setSidebarActive] = useState(false);
