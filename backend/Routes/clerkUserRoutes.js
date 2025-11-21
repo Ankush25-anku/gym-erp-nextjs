@@ -99,6 +99,7 @@ router.get("/me", verifyClerkToken, async (req, res) => {
     }
 
     res.json({
+      _id: user._id,
       sub: user.sub,
       email: user.email,
       role: user.role || role || "user",
