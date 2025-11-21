@@ -1,3 +1,6 @@
 node_modules/
 .env
 *.log
+
+# Firebase secret – MUST NOT be committed
+backend/firebase-service-account.json
