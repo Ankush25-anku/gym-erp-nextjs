@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const ClerkUser = require("../models/ClerkUser");
 const verifyClerkToken = require("../middleware/verifyClerkToken");
+const GymApproval = require("../models/GymApproval");
 
 // 🔁 Sync Clerk user to MongoDB with full profile
 router.post("/sync", verifyClerkToken, async (req, res) => {
@@ -158,6 +159,40 @@ router.get("/get-role", verifyClerkToken, async (req, res) => {
   } catch (err) {
     console.error("🔴 /get-role route error:", err);
     res.status(500).json({ error: "Server error" });
+  }
+});
+
+// 🔥 Get all Clerk Users belonging to a specific gym
+router.get("/by-gym/:gymCode", verifyClerkToken, async (req, res) => {
+  try {
+    const { gymCode } = req.params;
+
+    if (!gymCode) {
+      return res.status(400).json({ error: "Gym code is required" });
+    }
+
+    // 1️⃣ Find approved users for this gym using GymApproval
+    const approvals = await GymApproval.find({
+      gymCode,
+      status: "approved",
+    });
+
+    if (!approvals.length) {
+      return res.json([]); // no users
+    }
+
+    // 2️⃣ Extract all approved emails
+    const emails = approvals.map((u) => u.adminEmail.toLowerCase());
+
+    // 3️⃣ Fetch ClerkUser details
+    const users = await ClerkUser.find({
+      email: { $in: emails },
+    }).select("fullName email role imageUrl fcmToken");
+
+    res.json(users);
+  } catch (err) {
+    console.error("🔥 Error fetching users by gym:", err);
+    res.status(500).json({ error: "Failed to fetch users by gym" });
   }
 });
 

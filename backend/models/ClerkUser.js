@@ -18,6 +18,7 @@ const ClerkUserSchema = new mongoose.Schema(
 
     // ✅ Add this field
     requestAdminAccess: { type: Boolean, default: false },
+    fcmToken: { type: String, default: "" },
 
     // ✅ Optional staff info fields
     department: { type: String, default: "" },
@@ -25,7 +26,5 @@ const ClerkUserSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
-
-
 
 module.exports = mongoose.model("ClerkUser", ClerkUserSchema);

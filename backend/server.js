@@ -182,6 +182,9 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 require("dotenv").config();
+const cron = require("node-cron");
+const User = require("./models/User");
+const admin = require("./firebaseAdmin");
 
 // const superGymRoutes = require("./Routes/superGymRoutes"); // ✅ import at top
 
@@ -189,22 +192,19 @@ const app = express();
 
 // Middleware
 const allowedOrigins = [
+  process.env.FRONTENDURL,
   "http://localhost:3000",
   "http://localhost:3001",
-  "https://gym-erp-nextjs.vercel.app",   // your exact frontend domain
 ];
 
-// Enable wildcard for Vercel preview deployments
 const vercelWildcard = /\.vercel\.app$/;
 
 app.use(
   cors({
     origin: function (origin, callback) {
-      if (
-        !origin || 
-        allowedOrigins.includes(origin) ||
-        vercelWildcard.test(origin)
-      ) {
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin) || vercelWildcard.test(origin)) {
         callback(null, true);
       } else {
         console.log("❌ BLOCKED ORIGIN:", origin);
@@ -215,8 +215,34 @@ app.use(
   })
 );
 
-
 app.use(express.json());
+
+function startSubscriptionExpiryCron() {
+  cron.schedule("0 9 * * *", async () => {
+    console.log("🔔 Running subscription expiry cron job...");
+
+    const fiveDaysAhead = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000);
+
+    const expiringMembers = await User.find({
+      expiryDate: { $lte: fiveDaysAhead },
+      fcmToken: { $exists: true },
+    });
+
+    expiringMembers.forEach((member) => {
+      admin.messaging().send({
+        token: member.fcmToken,
+        notification: {
+          title: "Subscription Expiring Soon",
+          body: `${
+            member.fullname
+          }, your gym plan expires on ${member.expiryDate.toDateString()}`,
+        },
+      });
+    });
+
+    console.log(`📩 Sent ${expiringMembers.length} expiry notifications`);
+  });
+}
 
 // Function to connect MongoDB with retry
 const connectWithRetry = () => {
@@ -227,11 +253,12 @@ const connectWithRetry = () => {
 
       // Mount all routes AFTER DB connection
       mountRoutes();
+      startSubscriptionExpiryCron();
 
       // Start server
       const PORT = process.env.PORT || 5000;
       app.listen(PORT, () =>
-        console.log(`🚀 Server running on http://localhost:${PORT}`)
+        console.log(`Server running on http://localhost:${PORT}`)
       );
     })
     .catch((err) => {
@@ -239,9 +266,10 @@ const connectWithRetry = () => {
         "❌ MongoDB connection failed, retrying in 5s...",
         err.message
       );
-      setTimeout(connectWithRetry, 5000);
     });
 };
+
+connectWithRetry();
 
 // Function to mount all routes
 function mountRoutes() {
@@ -291,6 +319,10 @@ function mountRoutes() {
   app.use("/api/employees", require("./Routes/employeeRoutes"));
   app.use("/api/staff-approvals", require("./Routes/staffApprovalRoutes"));
 
+app.use("/api/clerkusers", require("./Routes/clerkFcmRoutes"));
+app.use("/api/notifications", require("./Routes/notifications"));
+
+
   app.use(
     "/api/admin/staff-attendance",
     require("./Routes/adminStaffAttendanceRoutes")
@@ -324,4 +356,4 @@ function mountRoutes() {
 }
 
 // Start initial connection
-connectWithRetry();
+// connectWithRetry();

@@ -39,12 +39,17 @@ export default function AdminDashboard() {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      const fullName = userRes.data?.fullName || "Admin";
-      setAdminFullName(fullName);
+      const userId = userRes.data?.sub;
+      const fullName = userRes.data?.fullName || "User";
+      const role = userRes.data?.role || "member";
+      const imageUrl = userRes.data?.imageUrl || "";
 
+      // ✅ Store in localStorage
       if (typeof window !== "undefined") {
+        localStorage.setItem("userId", userId); // 🔥 NEW
         localStorage.setItem("userFullName", fullName);
-        localStorage.setItem("userRole", userRes.data?.role || "admin");
+        localStorage.setItem("userRole", role);
+        localStorage.setItem("profileImage_admin_", imageUrl);
       }
 
       // ✅ 2️⃣ Fetch Gym Info
@@ -52,9 +57,9 @@ export default function AdminDashboard() {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      console.log("🏋️ Gym Data:", gymRes.data);
+      const code = gymRes?.data?.gym?.gymCode || "";
 
-      if (!gymRes.data?.gym?.gymCode) {
+      if (!code) {
         console.warn("⚠️ No gym found for this admin.");
         setNoGymFound(true);
         setGymCode("");
@@ -63,7 +68,7 @@ export default function AdminDashboard() {
         return;
       }
 
-      setGymCode(gymRes.data.gym.gymCode);
+      setGymCode(code);
       setNoGymFound(false);
       setError(null);
     } catch (err) {

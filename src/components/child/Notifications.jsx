@@ -1,291 +1,191 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
-import { Button, Modal, Form, Table } from "react-bootstrap";
+import { useAuth } from "@clerk/nextjs";
 import MasterLayout from "../../masterLayout/MasterLayout";
-import { useAuth, useUser } from "@clerk/nextjs";
 
-const API = `${process.env.NEXT_PUBLIC_API_URL}/api/notifications`;
+const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
-const Notifications = () => {
-  const [notifications, setNotifications] = useState([]);
-  const [showModal, setShowModal] = useState(false);
-  const [editingNotification, setEditingNotification] = useState(null);
-  const [gymId, setGymId] = useState("");
-
+export default function NotificationsPage() {
   const { getToken } = useAuth();
-  const { user, isLoaded } = useUser();
 
-  const fetchNotifications = async () => {
+  const [users, setUsers] = useState([]);
+  const [gymCode, setGymCode] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  const [userId, setUserId] = useState("all");
+  const [title, setTitle] = useState("");
+  const [message, setMessage] = useState("");
+
+  // -----------------------------------------------------
+  // 1️⃣ FETCH ADMIN INFO + GET HIS GYM CODE (GymApproval)
+  // -----------------------------------------------------
+  const fetchAdminAndGym = useCallback(async () => {
     try {
       const token = await getToken();
+      if (!token) return;
 
-      if (!isLoaded || !user || !token) return;
-
-      const role =
-        user.publicMetadata?.role || user.unsafeMetadata?.role || "member";
-
-      const gymUrl =
-        role === "superadmin"
-          ? `${process.env.NEXT_PUBLIC_API_URL}/api/gyms`
-          : `${process.env.NEXT_PUBLIC_API_URL}/api/gyms/my`;
-
-      const gymRes = await axios.get(gymUrl, {
+      // Fetch logged in Clerk profile
+      await axios.get(`${API}/api/clerkusers/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      const gyms = Array.isArray(gymRes.data)
-        ? gymRes.data
-        : gymRes.data.gyms || [];
-
-      const selectedGym = gyms[0];
-      const foundGymId = selectedGym?._id;
-
-      if (!foundGymId) return;
-
-      setGymId(foundGymId);
-
-      const res = await axios.get(`${API}?gymId=${foundGymId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "x-clerk-user-id": user.id,
-        },
+      // Fetch gymCode from GymApprovalRoutes
+      const gymRes = await axios.get(`${API}/api/gym/my-gym`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
 
-      setNotifications(res.data.filter((n) => !n.isDeleted));
-    } catch (err) {
-      console.error(
-        "❌ Failed to fetch notifications",
-        err.response?.data || err.message
-      );
-    }
-  };
+      const code = gymRes?.data?.gym?.gymCode;
 
-  const openAddModal = () => {
-    setEditingNotification({
-      type: "",
-      title: "",
-      message: "",
-      read: false,
-      createdAt: new Date().toISOString().split("T")[0],
-    });
-    setShowModal(true);
-  };
-
-  const openEditModal = (notification) => {
-    setEditingNotification({ ...notification });
-    setShowModal(true);
-  };
-
-  const handleSave = async () => {
-    try {
-      const token = await getToken();
-      if (!isLoaded || !user || !token) return;
-
-      const payload = {
-        ...editingNotification,
-        gymId,
-        userId: user.id,
-        read: Boolean(editingNotification.read),
-        isDeleted: false,
-      };
-
-      const headers = {
-        Authorization: `Bearer ${token}`,
-        "x-clerk-user-id": user.id,
-      };
-
-      if (editingNotification._id) {
-        await axios.put(`${API}/${editingNotification._id}`, payload, {
-          headers,
-        });
-      } else {
-        await axios.post(API, payload, { headers });
+      if (!code) {
+        alert("No gym found! Please join or create a gym first.");
+        return;
       }
 
-      setShowModal(false);
-      fetchNotifications();
+      setGymCode(code);
     } catch (err) {
-      console.error("❌ Save failed:", err.response?.data || err.message);
-      alert("Failed to save notification");
+      console.error("Error fetching admin or gym info:", err);
     }
-  };
+  }, [getToken]);
 
-  const handleDelete = async (id) => {
-    if (!confirm("Delete this notification?")) return;
+  // -----------------------------------------------------
+  // 2️⃣ FETCH ALL CLERK USERS THAT BELONG TO THIS GYM
+  // -----------------------------------------------------
+  const fetchGymUsers = useCallback(
+    async (code) => {
+      try {
+        const token = await getToken();
+
+        const res = await axios.get(`${API}/api/clerkusers/by-gym/${code}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        setUsers(res.data);
+      } catch (err) {
+        console.error("Error fetching users:", err);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [getToken]
+  );
+
+  // -----------------------------------------------------
+  // 3️⃣ Load admin + gym → then load users
+  // -----------------------------------------------------
+  useEffect(() => {
+    fetchAdminAndGym();
+  }, []);
+
+  useEffect(() => {
+    if (gymCode) {
+      fetchGymUsers(gymCode);
+    }
+  }, [gymCode, fetchGymUsers]);
+
+  // -----------------------------------------------------
+  // 4️⃣ SEND NOTIFICATION TO USER OR ALL USERS
+  // -----------------------------------------------------
+  const sendNotification = async () => {
+    if (!title || !message) {
+      alert("Title & message are required");
+      return;
+    }
 
     try {
       const token = await getToken();
-      if (!isLoaded || !user || !token) return;
 
-      await axios.put(
-        `${API}/${id}`,
+      await axios.post(
+        `${API}/api/notifications/send`,
+        { userId, title, message },
         {
-          isDeleted: true,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "x-clerk-user-id": user.id,
-          },
+          headers: { Authorization: `Bearer ${token}` },
         }
       );
 
-      fetchNotifications();
+      alert("Notification Sent Successfully!");
+      setTitle("");
+      setMessage("");
+      setUserId("all");
     } catch (err) {
-      alert("Failed to delete notification");
-      console.error("❌ Delete error:", err.response?.data || err.message);
+      console.error("Error sending notification:", err);
+      alert("Failed to send notification");
     }
   };
 
-  useEffect(() => {
-    if (isLoaded) fetchNotifications();
-  }, [isLoaded]);
-
+  // -----------------------------------------------------
+  // UI
+  // -----------------------------------------------------
   return (
     <MasterLayout>
       <div className="container py-4">
-        <div className="d-flex justify-content-between align-items-center mb-4">
-          <h2 className="fw-bold">Notifications</h2>
-          <Button onClick={openAddModal}>+ Add Notification</Button>
-        </div>
+        <h2 className="fw-bold mb-4">Send Notifications</h2>
 
-        <div className="table-responsive">
-          <Table bordered hover>
-            <thead className="table-light">
-              <tr>
-                <th>Type</th>
-                <th>Title</th>
-                <th>Message</th>
-                <th>Read</th>
-                <th>Created At</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {notifications.map((n) => (
-                <tr key={n._id}>
-                  <td>{n.type}</td>
-                  <td>{n.title}</td>
-                  <td>{n.message}</td>
-                  <td>{n.read ? "Yes" : "No"}</td>
-                  <td>{new Date(n.createdAt).toLocaleDateString()}</td>
-                  <td>
-                    <Button
-                      size="sm"
-                      variant="outline-primary"
-                      className="me-2"
-                      onClick={() => openEditModal(n)}
-                    >
-                      Edit
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline-danger"
-                      onClick={() => handleDelete(n._id)}
-                    >
-                      🗑
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        </div>
+        {loading ? (
+          <p>Loading users...</p>
+        ) : (
+          <div
+            className="card shadow-sm p-4"
+            style={{
+              maxWidth: "600px",
+              margin: "0 auto",
+              borderRadius: "12px",
+            }}
+          >
+            {/* Select User */}
+            <div className="mb-3">
+              <label className="form-label fw-semibold">Select Member</label>
+              <select
+                className="form-select"
+                value={userId}
+                onChange={(e) => setUserId(e.target.value)}
+              >
+                <option value="all">
+                  Send to ALL Members of Gym ({gymCode})
+                </option>
 
-        {/* Modal Form */}
-        <Modal show={showModal} onHide={() => setShowModal(false)} centered>
-          <Modal.Header closeButton>
-            <Modal.Title>
-              {editingNotification?._id ? "Edit" : "Add"} Notification
-            </Modal.Title>
-          </Modal.Header>
-          <Modal.Body>
-            <Form>
-              <Form.Group className="mb-2">
-                <Form.Label>Type</Form.Label>
-                <Form.Control
-                  type="text"
-                  value={editingNotification?.type || ""}
-                  onChange={(e) =>
-                    setEditingNotification((prev) => ({
-                      ...prev,
-                      type: e.target.value,
-                    }))
-                  }
-                />
-              </Form.Group>
+                {users.map((u) => (
+                  <option key={u._id} value={u._id}>
+                    {u.fullName} ({u.email})
+                  </option>
+                ))}
+              </select>
+            </div>
 
-              <Form.Group className="mb-2">
-                <Form.Label>Title</Form.Label>
-                <Form.Control
-                  type="text"
-                  value={editingNotification?.title || ""}
-                  onChange={(e) =>
-                    setEditingNotification((prev) => ({
-                      ...prev,
-                      title: e.target.value,
-                    }))
-                  }
-                />
-              </Form.Group>
+            {/* Title */}
+            <div className="mb-3">
+              <label className="form-label fw-semibold">Title</label>
+              <input
+                type="text"
+                className="form-control"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Enter notification title"
+              />
+            </div>
 
-              <Form.Group className="mb-2">
-                <Form.Label>Message</Form.Label>
-                <Form.Control
-                  as="textarea"
-                  rows={2}
-                  value={editingNotification?.message || ""}
-                  onChange={(e) =>
-                    setEditingNotification((prev) => ({
-                      ...prev,
-                      message: e.target.value,
-                    }))
-                  }
-                />
-              </Form.Group>
+            {/* Message */}
+            <div className="mb-3">
+              <label className="form-label fw-semibold">Message</label>
+              <textarea
+                className="form-control"
+                rows="3"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder="Enter notification message"
+              ></textarea>
+            </div>
 
-              <Form.Group className="mb-2">
-                <Form.Label>Read</Form.Label>
-                <Form.Check
-                  type="checkbox"
-                  checked={editingNotification?.read || false}
-                  onChange={(e) =>
-                    setEditingNotification((prev) => ({
-                      ...prev,
-                      read: e.target.checked,
-                    }))
-                  }
-                />
-              </Form.Group>
-
-              <Form.Group className="mb-2">
-                <Form.Label>Created At</Form.Label>
-                <Form.Control
-                  type="date"
-                  value={editingNotification?.createdAt?.split("T")[0] || ""}
-                  onChange={(e) =>
-                    setEditingNotification((prev) => ({
-                      ...prev,
-                      createdAt: e.target.value,
-                    }))
-                  }
-                />
-              </Form.Group>
-            </Form>
-          </Modal.Body>
-          <Modal.Footer>
-            <Button variant="secondary" onClick={() => setShowModal(false)}>
-              Cancel
-            </Button>
-            <Button variant="primary" onClick={handleSave}>
-              Save
-            </Button>
-          </Modal.Footer>
-        </Modal>
+            {/* Submit */}
+            <button
+              className="btn btn-primary w-100"
+              onClick={sendNotification}
+            >
+              Send Notification
+            </button>
+          </div>
+        )}
       </div>
     </MasterLayout>
   );
-};
-
-export default Notifications;
+}

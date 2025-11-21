@@ -10,6 +10,7 @@ import {
 import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
+// import NotificationListener from "../../components/NotificationListener";
 
 // ✅ Import your custom UserProvider
 import { UserProvider } from "../context/UserContext";
