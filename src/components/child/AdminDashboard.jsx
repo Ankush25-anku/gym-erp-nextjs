@@ -34,25 +34,28 @@ export default function AdminDashboard() {
       const token = await getToken();
       if (!token) return;
 
-      // ✅ 1️⃣ Fetch Clerk user info
+      // 1️⃣ Fetch Clerk user info (MongoDB + Clerk)
       const userRes = await axios.get(`${API_BASE}/api/clerkusers/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      const userId = userRes.data?.sub;
+      const mongoId = userRes.data?._id; // ✔ MongoDB ID
+      const clerkId = userRes.data?.sub; // ✔ Clerk user ID
       const fullName = userRes.data?.fullName || "User";
       const role = userRes.data?.role || "member";
       const imageUrl = userRes.data?.imageUrl || "";
 
-      // ✅ Store in localStorage
+      // 2️⃣ Store both IDs in localStorage
       if (typeof window !== "undefined") {
-        localStorage.setItem("userId", userId); // 🔥 NEW
+        localStorage.setItem("userMongoId", mongoId); // ✔ NEW
+        localStorage.setItem("userClerkId", clerkId); // ✔ NEW
+        localStorage.setItem("userId", mongoId); // ✔ Main userId
         localStorage.setItem("userFullName", fullName);
         localStorage.setItem("userRole", role);
         localStorage.setItem("profileImage_admin_", imageUrl);
       }
 
-      // ✅ 2️⃣ Fetch Gym Info
+      // 3️⃣ Fetch gym info
       const gymRes = await axios.get(`${API_BASE}/api/gym/my-gym`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -60,7 +63,6 @@ export default function AdminDashboard() {
       const code = gymRes?.data?.gym?.gymCode || "";
 
       if (!code) {
-        console.warn("⚠️ No gym found for this admin.");
         setNoGymFound(true);
         setGymCode("");
         setError("No gym found. Please create or join a gym first.");
