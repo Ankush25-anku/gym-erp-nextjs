@@ -172,23 +172,33 @@ export default function AfterSignInPage() {
 
     init();
   }, [isUserLoaded, isAuthLoaded, user, getToken, router]);
-
   const handleRoleSelect = async (roleLabel) => {
     const roleData = roleMap[roleLabel];
     if (!roleData) return;
 
     try {
-      await fetch("/api/set-role", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: roleData.key }),
-      });
+      const token = await getToken(); // 🔐 Get Clerk JWT
+      if (!token) {
+        alert("Unauthorized: No token found");
+        return;
+      }
+
+      // 🚀 ✅ FIX — Save role in backend correctly
+      await axios.post(
+        `${API}/api/clerkusers/set-role`,
+        { role: roleData.key },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
       localStorage.setItem("userRole", roleData.key);
       setShowRoleModal(false);
       router.push(roleData.path);
     } catch (err) {
-      console.error("Failed to set role:", err);
+      console.error(
+        "❌ Failed to set role:",
+        err.response?.data || err.message
+      );
+      alert("Failed to save role in backend");
     }
   };
 

@@ -12,13 +12,16 @@ router.post("/send", verifyClerkToken, async (req, res) => {
 
     if (userId === "all") {
       const users = await ClerkUser.find({
-        fcmToken: { $exists: true, $ne: "" },
+        "fcmTokens.token": { $exists: true, $ne: "" },
       });
-      tokens = users.map((u) => u.fcmToken);
+
+      users.forEach((u) => {
+        u.fcmTokens.forEach((t) => tokens.push(t.token));
+      });
     } else {
       const user = await ClerkUser.findById(userId);
-      if (user?.fcmToken) {
-        tokens = [user.fcmToken];
+      if (user) {
+        user.fcmTokens.forEach((t) => tokens.push(t.token));
       }
     }
 
@@ -38,10 +41,11 @@ router.post("/send", verifyClerkToken, async (req, res) => {
       success: true,
       sentBy: req.clerkUser.email,
       message: "Notification sent successfully",
+      sentTokensCount: tokens.length,
     });
   } catch (err) {
-    console.error("❌ Error sending notification:", err);
-    res.status(500).json({ success: false, err });
+    console.error("❌ Error sending notification:", err.message);
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 
