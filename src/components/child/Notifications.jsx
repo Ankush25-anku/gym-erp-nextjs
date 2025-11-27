@@ -15,38 +15,29 @@ export default function NotificationsPage() {
 
   const [userId, setUserId] = useState("all");
   const [title, setTitle] = useState("");
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(""); // ✅ used in payload
 
   // -----------------------------------------------------
-  // 1️⃣ Save FCM Token API Call ✅
+  // 1️⃣ Load Clerk SUB + GymCode from storage ✅
   // -----------------------------------------------------
-  const saveFcmToken = async (fcmTokenValue) => {
-    try {
-      const token = await getToken();
-      if (!token) {
-        alert("Unauthorized! Please login again.");
-        return;
-      }
+  useEffect(() => {
+    const loadStorage = async () => {
+      const sub = localStorage.getItem("clerkSub"); // ✅ saved from RN or login
+      const code = localStorage.getItem("gymCode");
 
-      const res = await axios.post(
-        `${API}/api/clerkusers/fcm/save-fcm-token`,
-        { fcmToken: fcmTokenValue },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      console.log("🧠 Storage loaded:", { sub, gymCode: code });
 
-      console.log("✅ FCM Token saved:", res.data);
-    } catch (err) {
-      console.error(
-        "❌ Error saving FCM token:",
-        err.response?.data || err.message
-      );
-    }
-  };
+      if (sub) setUserId(sub); // optional for sending single user
+      if (code) setGymCode(code);
+    };
+
+    loadStorage();
+  }, []);
 
   // -----------------------------------------------------
-  // 2️⃣ FETCH LOGGED-IN ADMIN & HIS GYM CODE ✅
+  // 2️⃣ Fetch Logged-in Admin Gym Code ✅ (Correct route)
   // -----------------------------------------------------
-  const fetchAdminAndGym = useCallback(async () => {
+  const fetchAdminGym = useCallback(async () => {
     try {
       const token = await getToken();
       if (!token) {
@@ -54,29 +45,35 @@ export default function NotificationsPage() {
         return;
       }
 
-      const gymRes = await axios.get(`${API}/api/admin/gyms/my-gym`, {
+      // ✅ fixed gym fetch route
+      const res = await axios.get(`${API}/api/admin/gyms/my-gym`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      const code = gymRes?.data?.gym?.gymCode;
-      console.log("🏋 Gym Code:", code);
+      const code = res?.data?.gym?.gymCode;
+      console.log("🏋 Gym Code from backend:", code);
 
       if (!code) {
-        alert("No gym found! Please create or join a gym.");
+        alert("No Gym Found! Please create or join a gym.");
         setLoading(false);
         return;
       }
 
       setGymCode(code);
     } catch (err) {
-      console.error("❌ Admin/Gym fetch error:", err.message);
+      console.error(
+        "❌ Admin/Gym fetch failed:",
+        err.response?.data || err.message
+      );
+      alert("Failed to load gym info.");
+      setLoading(false);
     }
   }, [getToken]);
 
   // -----------------------------------------------------
-  // 3️⃣ FETCH ONLY MEMBERS OF THIS GYM ✅
+  // 3️⃣ Fetch Only Gym Members ✅ (role === member)
   // -----------------------------------------------------
-  const fetchGymUsers = useCallback(
+  const fetchGymMembers = useCallback(
     async (code) => {
       try {
         const token = await getToken();
@@ -86,10 +83,16 @@ export default function NotificationsPage() {
           headers: { Authorization: `Bearer ${token}` },
         });
 
-        const onlyMembers = res.data.filter((u) => u.role === "member");
+        const onlyMembers = res.data.filter((u) => u.role === "member"); // ✅ correct filter
+        console.log("✅ Gym Members:", onlyMembers);
+
         setUsers(onlyMembers);
       } catch (err) {
-        console.error("❌ Fetch members error:", err.message);
+        console.error(
+          "❌ Member fetch error:",
+          err.response?.data || err.message
+        );
+        alert("Failed to load members.");
       } finally {
         setLoading(false);
       }
@@ -97,40 +100,63 @@ export default function NotificationsPage() {
     [getToken]
   );
 
-  // Auto load admin + gym → then members ✅
-  useEffect(() => {
-    fetchAdminAndGym();
-  }, [fetchAdminAndGym]);
-  useEffect(() => {
-    if (gymCode) fetchGymUsers(gymCode);
-  }, [gymCode, fetchGymUsers]);
+  // -----------------------------------------------------
+  // 4️⃣ Save FCM token to backend ✅ (Correct body key)
+  // -----------------------------------------------------
+  const saveFcmToken = async (fcmTokenValue) => {
+    if (!fcmTokenValue) return;
+
+    try {
+      const clerkToken = await getToken();
+      if (!clerkToken) return;
+
+      const res = await axios.post(
+        `${API}/api/clerkusers/fcm/save-fcm-token`, // ✅ positively mounted
+        {
+          fcmToken: fcmTokenValue, // 👈 FIXED ✅ must match backend key
+          platform: NATIVE_PLATFORM,
+          gymCode,
+        },
+        {
+          headers: { Authorization: `Bearer ${clerkToken}` },
+        }
+      );
+
+      console.log("📲 FCM Token stored in DB ✅:", res.data);
+    } catch (err) {
+      console.error("❌ FCM save failed:", err.response?.data || err.message);
+    }
+  };
 
   // -----------------------------------------------------
-  // 4️⃣ SEND NOTIFICATION ✅
+  // 5️⃣ Send Notification ✅ (Correct payload)
   // -----------------------------------------------------
   const sendNotification = async () => {
-    if (!title || !message) {
+    if (!title.trim() || !message.trim()) {
       alert("Title & message are required");
       return;
     }
 
     try {
-      const token = await getToken();
-      if (!token) {
-        alert("Unauthorized! Please login again.");
+      const clerkToken = await getToken();
+      if (!clerkToken) {
+        alert("Unauthorized! Login again.");
         return;
       }
 
       const payload = {
-        userId,
+        audience: "member",
         title,
-        message,
+        body: message, // ✅ backend expects `body` field for push
         gymCode,
-        data: { screen: "Notifications", audience: "member" },
+        userId, // "all" or specific _id
+        data: { screen: "Notifications" },
       };
 
+      console.log("🚀 Sending notification payload:", payload);
+
       const res = await axios.post(`${API}/api/notifications/send`, payload, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${clerkToken}` },
       });
 
       if (res.data.success) {
@@ -140,12 +166,27 @@ export default function NotificationsPage() {
         setUserId("all");
       }
     } catch (err) {
-      console.error("❌ Send notification failed:", err.message);
+      console.error(
+        "❌ Notification send failed:",
+        err.response?.data || err.message
+      );
+      alert("Failed to send notification.");
     }
   };
 
   // -----------------------------------------------------
-  // UI ✅ (members only dropdown)
+  // 6️⃣ Run API effects chain ✅
+  // -----------------------------------------------------
+  useEffect(() => {
+    fetchAdminGym();
+  }, [fetchAdminGym]);
+
+  useEffect(() => {
+    if (gymCode) fetchGymMembers(gymCode);
+  }, [gymCode, fetchGymMembers]);
+
+  // -----------------------------------------------------
+  // UI (Only gym members dropdown) ✅
   // -----------------------------------------------------
   return (
     <MasterLayout>
@@ -159,9 +200,8 @@ export default function NotificationsPage() {
         ) : (
           <div
             className="card shadow p-4 mx-auto"
-            style={{ maxWidth: "600px", borderRadius: 12 }}
+            style={{ maxWidth: 600, borderRadius: 12 }}
           >
-            {/* Member Select ✅ */}
             <div className="mb-3">
               <label className="form-label fw-semibold">
                 Select Gym Member
@@ -174,24 +214,21 @@ export default function NotificationsPage() {
                 <option value="all">Send to ALL Gym Members ({gymCode})</option>
                 {users.map((u) => (
                   <option key={u._id} value={u._id}>
-                    {u.fullName || `${u.first_name} ${u.last_name}`} ({u.email})
+                    {u.fullName} ({u.email})
                   </option>
                 ))}
               </select>
             </div>
 
-            {/* Title ✅ */}
             <div className="mb-3">
               <label className="form-label fw-semibold">Title</label>
               <input
-                type="text"
                 className="form-control"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
               />
             </div>
 
-            {/* Message ✅ */}
             <div className="mb-3">
               <label className="form-label fw-semibold">Message</label>
               <textarea
@@ -202,7 +239,6 @@ export default function NotificationsPage() {
               />
             </div>
 
-            {/* Send Button ✅ */}
             <button
               className="btn btn-primary w-100 fw-bold"
               onClick={sendNotification}
