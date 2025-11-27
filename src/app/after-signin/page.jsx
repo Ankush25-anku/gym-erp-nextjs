@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useUser, useAuth, SignedIn, SignedOut, SignIn } from "@clerk/nextjs";
 import axios from "axios";
 
-const API_BASE = "http://localhost:5000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL;
 
 export default function AfterSignInPage() {
   const { user, isLoaded: isUserLoaded } = useUser();
@@ -24,9 +24,11 @@ export default function AfterSignInPage() {
 
   const capitalize = (str) =>
     str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : "";
+
   useEffect(() => {
     const init = async () => {
       if (!isUserLoaded || !isAuthLoaded) return;
+
       if (!user) {
         setError("User not found. Please login again.");
         return;
@@ -35,25 +37,31 @@ export default function AfterSignInPage() {
       const email = user.primaryEmailAddress?.emailAddress;
       const token = await getToken();
 
+      if (user.id) {
+        localStorage.setItem("userId", user.id); // ✅ Store Clerk userId
+        console.log("✅ Stored Clerk userId:", user.id);
+      }
+
       if (!email || !token) {
         setError("Missing email or token");
+        console.error("❌ Clerk Email or Token missing");
         return;
       }
 
       try {
-        // 🧩 Always check backend first (to get latest role)
         const res = await axios.get(`${API_BASE}/api/clerkusers/get-role`, {
           headers: { Authorization: `Bearer ${token}` },
         });
 
-        const { role: backendRole, allowedEmail } = res.data;
+        const backendRole = res.data.role;
+        console.log("🔥 Backend Role received:", backendRole);
 
-        // 🧩 Save lowercase role
         if (backendRole) {
-          localStorage.setItem("userRole", backendRole.toLowerCase());
+          const roleLower = backendRole.toLowerCase();
+          localStorage.setItem("userRole", roleLower);
 
-          // 🧩 If role is Staff → auto-register as employee
-          if (backendRole.toLowerCase() === "staff") {
+          // Auto Register Employee if Staff
+          if (roleLower === "staff") {
             try {
               const employeeData = {
                 fullName: `${user.firstName || ""} ${
@@ -76,102 +84,37 @@ export default function AfterSignInPage() {
                 }
               );
 
-              console.log("✅ Employee auto-registered successfully");
+              console.log("✅ Staff employee auto-registered");
             } catch (err) {
-              console.warn(
-                "⚠️ Employee auto-registration failed:",
-                err.message
-              );
+              console.warn("⚠️ Employee auto-register failed:", err.message);
             }
           }
 
-          // 🧭 Redirect based on role
-          router.replace(roleMap[capitalize(backendRole)]?.path || "/");
+          // Redirect based on role
+          const mapped = roleMap[capitalize(backendRole)];
+          router.replace(mapped?.path || "/");
           return;
         }
 
-        // 🧩 Fallback to Clerk publicMetadata role if backend doesn’t have one
+        // Fallback → Clerk publicMetadata role
         const clerkRole = user.publicMetadata?.role;
         if (clerkRole) {
           localStorage.setItem("userRole", clerkRole.toLowerCase());
-          router.replace(roleMap[capitalize(clerkRole)]?.path || "/");
+          const mapped = roleMap[capitalize(clerkRole)];
+          router.replace(mapped?.path || "/");
           return;
         }
 
-        // 🧩 If role not set at all — show modal to pick role
+        // No Role → Show Modal
         setShowRoleModal(true);
       } catch (err) {
-        console.error("Error fetching role:", err);
-        setError("Failed to get role from backend");
-      }
-      try {
-        // 🧩 Always check backend first (to get latest role)
-        const res = await axios.get(`${API_BASE}/api/clerkusers/get-role`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        const { role: backendRole, allowedEmail } = res.data;
-
-        // 🧩 Save lowercase role
-        if (backendRole) {
-          localStorage.setItem("userRole", backendRole.toLowerCase());
-
-          // 🧩 If role is Staff → auto-register as employee
-          if (backendRole.toLowerCase() === "staff") {
-            try {
-              const employeeData = {
-                fullName: `${user.firstName || ""} ${
-                  user.lastName || ""
-                }`.trim(),
-                email,
-                phone: user?.phoneNumbers?.[0]?.phoneNumber || "",
-                department: "General",
-                position: "Staff",
-                profileImage: user.imageUrl || "",
-                requestAdminAccess: false,
-                role: "staff",
-              };
-
-              await axios.post(
-                `${API_BASE}/api/employees/register`,
-                employeeData,
-                {
-                  headers: { Authorization: `Bearer ${token}` },
-                }
-              );
-
-              console.log("✅ Employee auto-registered successfully");
-            } catch (err) {
-              console.warn(
-                "⚠️ Employee auto-registration failed:",
-                err.message
-              );
-            }
-          }
-
-          // 🧭 Redirect based on role
-          router.replace(roleMap[capitalize(backendRole)]?.path || "/");
-          return;
-        }
-
-        // 🧩 Fallback to Clerk publicMetadata role if backend doesn’t have one
-        const clerkRole = user.publicMetadata?.role;
-        if (clerkRole) {
-          localStorage.setItem("userRole", clerkRole.toLowerCase());
-          router.replace(roleMap[capitalize(clerkRole)]?.path || "/");
-          return;
-        }
-
-        // 🧩 If role not set at all — show modal to pick role
-        setShowRoleModal(true);
-      } catch (err) {
-        console.error("Error fetching role:", err);
+        console.error("❌ Failed to fetch role from backend:", err.message);
         setError("Failed to get role from backend");
       }
     };
 
     init();
-  }, [isUserLoaded, isAuthLoaded, user, getToken, router]);
+  }, [isUserLoaded, isAuthLoaded, user, router]);
   const handleRoleSelect = async (roleLabel) => {
     const roleData = roleMap[roleLabel];
     if (!roleData) return;
