@@ -319,9 +319,8 @@ function mountRoutes() {
   app.use("/api/employees", require("./Routes/employeeRoutes"));
   app.use("/api/staff-approvals", require("./Routes/staffApprovalRoutes"));
 
-app.use("/api/clerkusers", require("./Routes/clerkFcmRoutes"));
-app.use("/api/notifications", require("./Routes/notifications"));
-
+  app.use("/api/clerkusers", require("./Routes/clerkFcmRoutes"));
+  app.use("/api/notifications", require("./Routes/notifications"));
 
   app.use(
     "/api/admin/staff-attendance",
