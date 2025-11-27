@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@clerk/clerk-react";
+
 import MasterLayout from "../../masterLayout/MasterLayout";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
@@ -15,83 +16,58 @@ export default function NotificationsPage() {
 
   const [userId, setUserId] = useState("all");
   const [title, setTitle] = useState("");
-  const [message, setMessage] = useState(""); // ✅ used in payload
+  const [message, setMessage] = useState("");
 
   // -----------------------------------------------------
-  // 1️⃣ Load Clerk SUB + GymCode from storage ✅
-  // -----------------------------------------------------
-  useEffect(() => {
-    const loadStorage = async () => {
-      const sub = localStorage.getItem("clerkSub"); // ✅ saved from RN or login
-      const code = localStorage.getItem("gymCode");
-
-      console.log("🧠 Storage loaded:", { sub, gymCode: code });
-
-      if (sub) setUserId(sub); // optional for sending single user
-      if (code) setGymCode(code);
-    };
-
-    loadStorage();
-  }, []);
-
-  // -----------------------------------------------------
-  // 2️⃣ Fetch Logged-in Admin Gym Code ✅ (Correct route)
+  // 1️⃣ Fetch My Gym Code ✅
   // -----------------------------------------------------
   const fetchAdminGym = useCallback(async () => {
-    try {
-      const token = await getToken();
-      if (!token) {
-        setLoading(false);
-        return;
-      }
+    const token = await getToken();
+    if (!token) {
+      setLoading(false);
+      return;
+    }
 
-      // ✅ fixed gym fetch route
+    try {
       const res = await axios.get(`${API}/api/admin/gyms/my-gym`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      const code = res?.data?.gym?.gymCode;
-      console.log("🏋 Gym Code from backend:", code);
-
+      const code = res?.data?.gym?.gymCode || "";
       if (!code) {
         alert("No Gym Found! Please create or join a gym.");
         setLoading(false);
         return;
       }
 
+      console.log("🏋 My Gym Code:", code);
       setGymCode(code);
+      localStorage.setItem("gymCode", code);
     } catch (err) {
-      console.error(
-        "❌ Admin/Gym fetch failed:",
-        err.response?.data || err.message
-      );
-      alert("Failed to load gym info.");
+      console.error("❌ Gym fetch:", err.response?.data || err.message);
+      alert("Failed to load gym.");
       setLoading(false);
     }
   }, [getToken]);
 
   // -----------------------------------------------------
-  // 3️⃣ Fetch Only Gym Members ✅ (role === member)
+  // 2️⃣ Fetch Gym Members Only ✅
   // -----------------------------------------------------
   const fetchGymMembers = useCallback(
     async (code) => {
-      try {
-        const token = await getToken();
-        if (!token) return;
+      const token = await getToken();
+      if (!token || !code) return;
 
+      try {
         const res = await axios.get(`${API}/api/clerkusers/by-gym/${code}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
 
-        const onlyMembers = res.data.filter((u) => u.role === "member"); // ✅ correct filter
-        console.log("✅ Gym Members:", onlyMembers);
-
+        const onlyMembers = res.data.filter((u) => u.role === "member");
+        console.log("👥 Members:", onlyMembers);
         setUsers(onlyMembers);
       } catch (err) {
-        console.error(
-          "❌ Member fetch error:",
-          err.response?.data || err.message
-        );
+        console.error("❌ Member fetch:", err.response?.data || err.message);
         alert("Failed to load members.");
       } finally {
         setLoading(false);
@@ -101,35 +77,36 @@ export default function NotificationsPage() {
   );
 
   // -----------------------------------------------------
-  // 4️⃣ Save FCM token to backend ✅ (Correct body key)
+  // 3️⃣ Save FCM Token to Backend ✅
   // -----------------------------------------------------
   const saveFcmToken = async (fcmTokenValue) => {
-    if (!fcmTokenValue) return;
+    if (!fcmTokenValue || !gymCode) return;
+
+    const token = await getToken();
+    if (!token) return;
 
     try {
-      const clerkToken = await getToken();
-      if (!clerkToken) return;
-
       const res = await axios.post(
-        `${API}/api/clerkusers/fcm/save-fcm-token`, // ✅ positively mounted
+        `${API}/api/clerkusers/fcm/save-fcm-token`,
         {
-          fcmToken: fcmTokenValue, // 👈 FIXED ✅ must match backend key
+          fcmToken: fcmTokenValue, // ✅ Correct key
           platform: NATIVE_PLATFORM,
           gymCode,
         },
         {
-          headers: { Authorization: `Bearer ${clerkToken}` },
+          headers: { Authorization: `Bearer ${token}` },
         }
       );
 
-      console.log("📲 FCM Token stored in DB ✅:", res.data);
+      console.log("✅ FCM Token Save:", res.data);
     } catch (err) {
-      console.error("❌ FCM save failed:", err.response?.data || err.message);
+      console.error("❌ FCM Save:", err.response?.data || err.message);
+      alert("Failed to save FCM token.");
     }
   };
 
   // -----------------------------------------------------
-  // 5️⃣ Send Notification ✅ (Correct payload)
+  // 4️⃣ Send Notification ✅
   // -----------------------------------------------------
   const sendNotification = async () => {
     if (!title.trim() || !message.trim()) {
@@ -137,45 +114,42 @@ export default function NotificationsPage() {
       return;
     }
 
-    try {
-      const clerkToken = await getToken();
-      if (!clerkToken) {
-        alert("Unauthorized! Login again.");
-        return;
-      }
+    const token = await getToken();
+    if (!token) {
+      alert("Unauthorized!");
+      return;
+    }
 
+    try {
       const payload = {
+        userId,
         audience: "member",
         title,
-        body: message, // ✅ backend expects `body` field for push
+        body: message, // ✅ backend FCM body expects "body"
         gymCode,
-        userId, // "all" or specific _id
         data: { screen: "Notifications" },
       };
 
-      console.log("🚀 Sending notification payload:", payload);
+      console.log("🚀 Sending:", payload);
 
       const res = await axios.post(`${API}/api/notifications/send`, payload, {
-        headers: { Authorization: `Bearer ${clerkToken}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       if (res.data.success) {
-        alert(`✅ Notification sent to ${res.data.resultCount} members!`);
+        alert(`✅ Sent to ${res.data.resultCount} members`);
         setTitle("");
         setMessage("");
         setUserId("all");
       }
     } catch (err) {
-      console.error(
-        "❌ Notification send failed:",
-        err.response?.data || err.message
-      );
+      console.error("❌ Send:", err.response?.data || err.message);
       alert("Failed to send notification.");
     }
   };
 
   // -----------------------------------------------------
-  // 6️⃣ Run API effects chain ✅
+  // 5️⃣ Load chain on start ✅
   // -----------------------------------------------------
   useEffect(() => {
     fetchAdminGym();
@@ -186,7 +160,7 @@ export default function NotificationsPage() {
   }, [gymCode, fetchGymMembers]);
 
   // -----------------------------------------------------
-  // UI (Only gym members dropdown) ✅
+  // UI ✅
   // -----------------------------------------------------
   return (
     <MasterLayout>
