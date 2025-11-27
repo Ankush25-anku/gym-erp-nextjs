@@ -7,37 +7,15 @@ const GymApproval = require("../models/GymApproval");
 // 🔁 Sync Clerk user to MongoDB with full profile
 router.post("/sync", verifyClerkToken, async (req, res) => {
   try {
-    const {
-      sub,
-      email: clerkEmail,
-      first_name,
-      last_name,
-      role,
-    } = req.clerkUser;
-    const {
-      gymCode, // 👈 now accepting gymCode
-      fcmToken, // 👈 now accepting fcmToken
-      platform,
-      fullName,
-      email,
-      phone,
-      gender,
-      dob,
-      address,
-      city,
-      state,
-      country,
-      zipcode,
-      imageUrl,
-      additionalInfo,
-    } = req.body;
+    const { sub, email: clerkEmail, first_name, last_name } = req.clerkUser;
+    const { gymCode, fcmToken, platform } = req.body;
 
+    // Final computed name
     const finalFullName =
-      fullName?.trim() ||
       `${first_name || ""} ${last_name || ""}`.trim() ||
-      (email ? email.split("@")[0] : "");
+      clerkEmail.split("@")[0];
 
-    const finalEmail = email?.toLowerCase().trim() || email || clerkEmail;
+    const finalEmail = clerkEmail.toLowerCase().trim();
 
     const updatePayload = {
       sub,
@@ -45,26 +23,19 @@ router.post("/sync", verifyClerkToken, async (req, res) => {
       first_name,
       last_name,
       fullName: finalFullName,
-      role: role || role,
-      phone: phone || "",
-      gender: gender || "",
-      dob: dob || "",
-      address: address || "",
-      city: city || "",
-      state: state || "",
-      country: country || "",
-      zipcode: zipcode || "",
-      imageUrl: imageUrl || "",
-      additionalInfo: additionalInfo || "",
-      gymCode: gymCode || "", // ✅ now stored
+      role: "member",
+      phone: "",
+      imageUrl: "",
+      additionalInfo: "",
+      gymCode: gymCode || "",
     };
 
-    // 🔥 Append FCM token into array if sent ✅
+    // 🔥 Add FCM token into fcmTokens array (avoid duplicates) ✅
     if (fcmToken) {
       updatePayload.$addToSet = {
         fcmTokens: {
           token: fcmToken,
-          platform: platform || platform || "web",
+          platform: platform || "web",
           createdAt: new Date(),
         },
       };
@@ -79,19 +50,18 @@ router.post("/sync", verifyClerkToken, async (req, res) => {
     res.json({
       success: true,
       message: "User profile synced successfully ✅",
+      tokensStored: updatedUser.fcmTokens.length,
       user: updatedUser,
     });
   } catch (err) {
     console.error("🔴 Sync Error:", err);
-    res
-      .status(500)
-      .json({ success: false, message: "Failed to sync Clerk user" });
+    res.status(500).json({ success: false, message: "Failed to sync user" });
   }
 });
 
-// ------------------------------------
-// 2️⃣ Get logged-in user ✅
-// ------------------------------------
+// ---------------------------------
+// 🙋‍♂️ Get logged in user ✅
+// ---------------------------------
 router.get("/me", verifyClerkToken, async (req, res) => {
   try {
     const { sub, email, role, fullName } = req.clerkUser;
@@ -111,8 +81,8 @@ router.get("/me", verifyClerkToken, async (req, res) => {
       email: user.email,
       role: user.role,
       fullName: user.fullName,
-      gymCode: user.gymCode, // ✅ now returned
-      fcmTokens: user.fcmTokens, // ✅ also returned to verify
+      gymCode: user.gymCode,
+      fcmTokens: user.fcmTokens,
       phone: user.phone,
       gender: user.gender,
       dob: user.dob,
@@ -122,48 +92,62 @@ router.get("/me", verifyClerkToken, async (req, res) => {
       country: user.country,
       zipcode: user.zipcode,
       imageUrl: user.imageUrl,
-      additionalInfo: user.additionalInfo,
     });
   } catch (err) {
-    console.error("🔴 /me route error:", err);
-    res.status(500).json({ error: "Server error" });
+    console.error("❌ Error fetching /me:", err.message);
+    res.status(500).json({ success: false });
   }
 });
 
-// ------------------------------------------------------
-// 3️⃣ Fetch all users belonging to an approved gym ✅ (Fixed)
-// ------------------------------------------------------
+// ---------------------------------------------------
+// 👥 Get ALL USERS that belong to *approved gym* ✅
+// ---------------------------------------------------
 router.get("/by-gym/:gymCode", verifyClerkToken, async (req, res) => {
   try {
     const { gymCode } = req.params;
-    if (!gymCode) return res.status(400).json({ error: "GymCode required" });
+    if (!gymCode) return res.status(400).json([]);
 
-    // 1️⃣ Get approved admins for this gym
-    const approvals = await GymApproval.find({ gymCode, status: "approved" });
+    // ✅ Step 1 → Get approved emails for this gym (from approval model)
+    const approvals = await GymApproval.find({
+      gymCode,
+      status: "approved",
+    });
     if (!approvals.length) return res.json([]);
 
-    const emails = approvals.map((a) => a.adminEmail.toLowerCase());
+    const approvedEmails = approvals.map((a) => a.adminEmail.toLowerCase());
 
-    // 2️⃣ Fetch all users in this gym that were approved OR joined
+    // ✅ Step 2 → Fetch users from ClerkUser that belong to this gym by email
     const users = await ClerkUser.find({
-      email: { $in: emails },
+      email: { $in: approvedEmails },
       gymCode: gymCode,
-    }).select("fullName email role imageUrl fcmTokens");
+      "fcmTokens.token": { $exists: true, $ne: "" }, // ensures they have at least one valid FCM token
+    });
 
-    // 3️⃣ Format final list ✅
+    // ✅ Extract unique tokens for broadcast
+    const uniqueTokens = [
+      ...new Set(users.flatMap((u) => u.fcmTokens.map((f) => f.token))),
+    ];
+
     const formatted = users.map((u) => ({
       _id: u._id,
       fullName: u.fullName,
       email: u.email,
       role: u.role,
       imageUrl: u.imageUrl,
-      fcmTokens: u.fcmTokens, // ✅ correct array now returned
+      fcmTokenCount: u.fcmTokens.length,
     }));
 
-    res.json(formatted);
+    res.json({
+      success: true,
+      gymCode,
+      resultCount: formatted.length,
+      tokensReady: uniqueTokens.length,
+      members: formatted,
+      fcmTokens: uniqueTokens, // 👈 used for FCM send API
+    });
   } catch (err) {
-    console.error("🔥 Gym member fetch failed:", err);
-    res.status(500).json({ error: "Failed to fetch gym members" });
+    console.error("❌ Gym fetch:", err.message);
+    res.status(500).json([]);
   }
 });
 
