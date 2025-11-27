@@ -2,7 +2,6 @@
 import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { useAuth } from "@clerk/clerk-react";
-
 import MasterLayout from "../../masterLayout/MasterLayout";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
@@ -19,14 +18,24 @@ export default function NotificationsPage() {
   const [message, setMessage] = useState("");
 
   // -----------------------------------------------------
-  // 1️⃣ Fetch My Gym Code ✅
+  // 1️⃣ Print token manually so you can copy it ✅
+  // -----------------------------------------------------
+  const logClerkToken = async () => {
+    const token = await getToken();
+    console.log("🎫 Clerk Session JWT Token:", token);
+  };
+
+  // -----------------------------------------------------
+  // 2️⃣ Fetch My Gym ✅
   // -----------------------------------------------------
   const fetchAdminGym = useCallback(async () => {
     const token = await getToken();
     if (!token) {
+      console.log("🚫 No Clerk token available");
       setLoading(false);
       return;
     }
+    console.log("🎫 Using Clerk token for Gym fetch:", token);
 
     try {
       const res = await axios.get(`${API}/api/admin/gyms/my-gym`, {
@@ -35,7 +44,7 @@ export default function NotificationsPage() {
 
       const code = res?.data?.gym?.gymCode || "";
       if (!code) {
-        alert("No Gym Found! Please create or join a gym.");
+        alert("No Gym Found!");
         setLoading(false);
         return;
       }
@@ -45,30 +54,26 @@ export default function NotificationsPage() {
       localStorage.setItem("gymCode", code);
     } catch (err) {
       console.error("❌ Gym fetch:", err.response?.data || err.message);
-      alert("Failed to load gym.");
       setLoading(false);
     }
   }, [getToken]);
 
   // -----------------------------------------------------
-  // 2️⃣ Fetch Gym Members Only ✅
+  // 3️⃣ Fetch Gym Members ✅
   // -----------------------------------------------------
   const fetchGymMembers = useCallback(
     async (code) => {
       const token = await getToken();
-      if (!token || !code) return;
+      if (!token) return;
 
       try {
         const res = await axios.get(`${API}/api/clerkusers/by-gym/${code}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-
         const onlyMembers = res.data.filter((u) => u.role === "member");
-        console.log("👥 Members:", onlyMembers);
         setUsers(onlyMembers);
       } catch (err) {
         console.error("❌ Member fetch:", err.response?.data || err.message);
-        alert("Failed to load members.");
       } finally {
         setLoading(false);
       }
@@ -77,46 +82,14 @@ export default function NotificationsPage() {
   );
 
   // -----------------------------------------------------
-  // 3️⃣ Save FCM Token to Backend ✅
-  // -----------------------------------------------------
-  const saveFcmToken = async (fcmTokenValue) => {
-    if (!fcmTokenValue || !gymCode) return;
-
-    const token = await getToken();
-    if (!token) return;
-
-    try {
-      const res = await axios.post(
-        `${API}/api/clerkusers/fcm/save-fcm-token`,
-        {
-          fcmToken: fcmTokenValue, // ✅ Correct key
-          platform: NATIVE_PLATFORM,
-          gymCode,
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-
-      console.log("✅ FCM Token Save:", res.data);
-    } catch (err) {
-      console.error("❌ FCM Save:", err.response?.data || err.message);
-      alert("Failed to save FCM token.");
-    }
-  };
-
-  // -----------------------------------------------------
   // 4️⃣ Send Notification ✅
   // -----------------------------------------------------
   const sendNotification = async () => {
-    if (!title.trim() || !message.trim()) {
-      alert("Title & message are required");
-      return;
-    }
-
     const token = await getToken();
+    console.log("🎫 Clerk Session Token Used for Send:", token);
+
     if (!token) {
-      alert("Unauthorized!");
+      alert("Unauthorized");
       return;
     }
 
@@ -125,102 +98,90 @@ export default function NotificationsPage() {
         userId,
         audience: "member",
         title,
-        body: message, // ✅ backend FCM body expects "body"
+        body: message,
         gymCode,
         data: { screen: "Notifications" },
       };
-
-      console.log("🚀 Sending:", payload);
 
       const res = await axios.post(`${API}/api/notifications/send`, payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (res.data.success) {
-        alert(`✅ Sent to ${res.data.resultCount} members`);
-        setTitle("");
-        setMessage("");
-        setUserId("all");
-      }
+      console.log("✅ Notification API Response:", res.data);
     } catch (err) {
-      console.error("❌ Send:", err.response?.data || err.message);
-      alert("Failed to send notification.");
+      console.error("❌ Send Notification:", err.response?.data || err.message);
     }
   };
 
-  // -----------------------------------------------------
-  // 5️⃣ Load chain on start ✅
-  // -----------------------------------------------------
+  // Load chain ✅
   useEffect(() => {
     fetchAdminGym();
   }, [fetchAdminGym]);
 
   useEffect(() => {
     if (gymCode) fetchGymMembers(gymCode);
-  }, [gymCode, fetchGymMembers]);
+  }, [gymCode]);
 
-  // -----------------------------------------------------
   // UI ✅
-  // -----------------------------------------------------
   return (
     <MasterLayout>
       <div className="container py-4">
-        <h2 className="fw-bold mb-4 text-center">📣 Send Notifications</h2>
+        <h2 className="fw-bold mb-3 text-center">📣 Send Notifications</h2>
 
-        {loading ? (
-          <div className="text-center">
-            <p>Loading gym members...</p>
-          </div>
-        ) : (
-          <div
-            className="card shadow p-4 mx-auto"
-            style={{ maxWidth: 600, borderRadius: 12 }}
-          >
-            <div className="mb-3">
-              <label className="form-label fw-semibold">
-                Select Gym Member
-              </label>
-              <select
-                className="form-select"
-                value={userId}
-                onChange={(e) => setUserId(e.target.value)}
-              >
-                <option value="all">Send to ALL Gym Members ({gymCode})</option>
-                {users.map((u) => (
-                  <option key={u._id} value={u._id}>
-                    {u.fullName} ({u.email})
-                  </option>
-                ))}
-              </select>
-            </div>
+        {/* 👇 New Button to Print Token */}
+        <button
+          className="btn btn-dark w-100 fw-bold mb-3"
+          onClick={logClerkToken}
+        >
+          🧪 Print Clerk Token to Console
+        </button>
 
-            <div className="mb-3">
-              <label className="form-label fw-semibold">Title</label>
-              <input
-                className="form-control"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-              />
-            </div>
-
-            <div className="mb-3">
-              <label className="form-label fw-semibold">Message</label>
-              <textarea
-                className="form-control"
-                rows="3"
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-              />
-            </div>
-
-            <button
-              className="btn btn-primary w-100 fw-bold"
-              onClick={sendNotification}
+        <div
+          className="card shadow p-4 mx-auto"
+          style={{ maxWidth: 600, borderRadius: 12 }}
+        >
+          <div className="mb-3">
+            <label className="form-label fw-semibold">Select Gym Member</label>
+            <select
+              className="form-select"
+              value={userId}
+              onChange={(e) => setUserId(e.target.value)}
             >
-              🚀 Send Notification
-            </button>
+              <option value="all">Send to ALL Gym Members ({gymCode})</option>
+              {users.map((u) => (
+                <option key={u._id} value={u._id}>
+                  {u.fullName} ({u.email})
+                </option>
+              ))}
+            </select>
           </div>
-        )}
+
+          <div className="mb-3">
+            <label className="form-label fw-semibold">Title</label>
+            <input
+              className="form-control"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+          </div>
+
+          <div className="mb-3">
+            <label className="form-label fw-semibold">Message</label>
+            <textarea
+              className="form-control"
+              rows="3"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+            />
+          </div>
+
+          <button
+            className="btn btn-primary w-100 fw-bold"
+            onClick={sendNotification}
+          >
+            🚀 Send Notification
+          </button>
+        </div>
       </div>
     </MasterLayout>
   );

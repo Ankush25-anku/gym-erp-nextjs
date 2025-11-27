@@ -1,5 +1,14 @@
 const mongoose = require("mongoose");
-// models/ClerkUser.js
+
+const FcmTokenSchema = new mongoose.Schema(
+  {
+    token: { type: String, required: true },
+    platform: { type: String, enum: ["ios", "android", "web"], default: "web" },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
 const ClerkUserSchema = new mongoose.Schema(
   {
     sub: { type: String, required: true, unique: true },
@@ -9,20 +18,20 @@ const ClerkUserSchema = new mongoose.Schema(
     fullName: { type: String, default: "" },
     role: {
       type: String,
-      enum: ["superadmin", "admin", "staff", "member", "trainer"],
+      enum: ["superadmin", "admin", "staff", "member", "trainer", "trainer"],
       default: "member",
     },
     phone: { type: String, default: "" },
     imageUrl: { type: String, default: "" },
     additionalInfo: { type: String, default: "" },
 
-    // ✅ Add this field
     requestAdminAccess: { type: Boolean, default: false },
-    fcmToken: { type: String, default: "" },
 
-    // ✅ Optional staff info fields
-    department: { type: String, default: "" },
-    position: { type: String, default: "" },
+    // 🔥 FIX: Store Gym Code instead of Gym ID ✅
+    gymCode: { type: String, default: "" },
+
+    // 🔥 FIX: Store multiple FCM tokens per user ✅
+    fcmTokens: { type: [FcmTokenSchema], default: [] },
   },
   { timestamps: true }
 );

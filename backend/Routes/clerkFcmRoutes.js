@@ -4,9 +4,10 @@ const verifyClerkToken = require("../middleware/verifyClerkToken");
 
 const router = express.Router();
 
+// SAVE FCM TOKEN ✅ (Push into fcmTokens array)
 router.post("/save-fcm-token", verifyClerkToken, async (req, res) => {
-  const { fcmToken } = req.body;
-  const clerkId = req.clerkUser.sub; // ✅ Clerk user ID from token
+  const { fcmToken, platform, gymCode } = req.body;
+  const clerkId = req.clerkUser.sub;
 
   if (!fcmToken) {
     return res
@@ -16,28 +17,21 @@ router.post("/save-fcm-token", verifyClerkToken, async (req, res) => {
 
   try {
     const user = await ClerkUser.findOneAndUpdate(
-      { sub: clerkId }, // ✅ Match Clerk ID
-      { fcmToken }, // ✅ Save/update FCM token
-      { new: true, upsert: false }
+      { sub: clerkId },
+      {
+        $set: { gymCode: gymCode || "" }, // save gymCode
+        $push: { fcmTokens: { token: fcmToken, platform: platform || "web" } }, // ✅ FIXED
+      },
+      { new: true }
     );
-
-    if (!user) {
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found in database" });
-    }
 
     return res.json({
       success: true,
       message: "FCM token saved successfully",
-      user: {
-        sub: user.sub,
-        email: user.email,
-        fcmToken: user.fcmToken,
-      },
+      user: { sub: user.sub, email: user.email, fcmTokens: user.fcmTokens },
     });
   } catch (err) {
-    console.error("❌ Error saving FCM token:", err);
+    console.error("❌ Error saving FCM:", err);
     return res
       .status(500)
       .json({ success: false, message: "Server error saving FCM token" });
