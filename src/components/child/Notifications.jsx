@@ -13,56 +13,59 @@ export default function NotificationsPage() {
   const [gymCode, setGymCode] = useState("");
   const [loading, setLoading] = useState(true);
 
-  const [userId, setUserId] = useState("all");
+  const [receiverId, setReceiverId] = useState("all"); // 🔥 renamed for clarity
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
 
   // -----------------------------------------------------
-  // 1️⃣ FETCH ADMIN INFO + GET HIS GYM CODE (GymApproval)
+  // 1️⃣ FETCH ADMIN & GYM CODE
   // -----------------------------------------------------
   const fetchAdminAndGym = useCallback(async () => {
     try {
       const token = await getToken();
-      if (!token) return;
+      if (!token) {
+        setLoading(false);
+        return;
+      }
 
-      // Fetch logged in Clerk profile
+      // Fetch profile just to verify token
       await axios.get(`${API}/api/clerkusers/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      // Fetch gymCode from GymApprovalRoutes
-      const gymRes = await axios.get(`${API}/api/gym/my-gym`, {
+      // Fetch gymCode
+      const gymRes = await axios.get(`${API}/api/admin/gyms/my-gym`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      const code = gymRes?.data?.gym?.gymCode;
-
+      const code = gymRes?.data?.gym?.gymCode || gymRes?.data?.gym?.gymCode;
       if (!code) {
-        alert("No gym found! Please join or create a gym first.");
+        alert("⚠️ No gym found! Please join or create a gym first.");
+        setLoading(false);
         return;
       }
 
       setGymCode(code);
     } catch (err) {
-      console.error("Error fetching admin or gym info:", err);
+      console.error("❌ Error fetching admin or gym:", err.message);
     }
   }, [getToken]);
 
   // -----------------------------------------------------
-  // 2️⃣ FETCH ALL CLERK USERS THAT BELONG TO THIS GYM
+  // 2️⃣ FETCH ALL USERS OF THIS GYM
   // -----------------------------------------------------
   const fetchGymUsers = useCallback(
     async (code) => {
       try {
         const token = await getToken();
-
         const res = await axios.get(`${API}/api/clerkusers/by-gym/${code}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
 
-        setUsers(res.data);
+        setUsers(res.data || []);
       } catch (err) {
-        console.error("Error fetching users:", err);
+        console.error("❌ Error fetching users by gym:", err.message);
+        setUsers([]);
       } finally {
         setLoading(false);
       }
@@ -70,13 +73,12 @@ export default function NotificationsPage() {
     [getToken]
   );
 
-  // -----------------------------------------------------
-  // 3️⃣ Load admin + gym → then load users
-  // -----------------------------------------------------
+  // Load admin + gym
   useEffect(() => {
     fetchAdminAndGym();
-  }, []);
+  }, [fetchAdminAndGym]);
 
+  // Load users when gymCode arrives
   useEffect(() => {
     if (gymCode) {
       fetchGymUsers(gymCode);
@@ -84,37 +86,38 @@ export default function NotificationsPage() {
   }, [gymCode, fetchGymUsers]);
 
   // -----------------------------------------------------
-  // 4️⃣ SEND NOTIFICATION TO USER OR ALL USERS
+  // 3️⃣ SEND NOTIFICATION
   // -----------------------------------------------------
   const sendNotification = async () => {
-    if (!title || !message) {
-      alert("Title & message are required");
+    if (!title.trim() || !message.trim()) {
+      alert("⚠️ Title & message are required!");
       return;
     }
 
     try {
       const token = await getToken();
+      if (!token) return;
 
       await axios.post(
         `${API}/api/notifications/send`,
-        { userId, title, message },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        { userId: receiverId, title, message, gymCode }, // 🔥 added gymCode
+        { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      alert("Notification Sent Successfully!");
+      alert("✅ Notification sent successfully!");
+
+      // Reset form ✅
       setTitle("");
       setMessage("");
-      setUserId("all");
+      setReceiverId("all");
     } catch (err) {
-      console.error("Error sending notification:", err);
-      alert("Failed to send notification");
+      console.error("❌ Notification send failed:", err.message);
+      alert("❌ Failed to send notification");
     }
   };
 
   // -----------------------------------------------------
-  // UI
+  // UI RENDER
   // -----------------------------------------------------
   return (
     <MasterLayout>
@@ -122,7 +125,7 @@ export default function NotificationsPage() {
         <h2 className="fw-bold mb-4">Send Notifications</h2>
 
         {loading ? (
-          <p>Loading users...</p>
+          <p className="text-center">Loading gym users...</p>
         ) : (
           <div
             className="card shadow-sm p-4"
@@ -132,27 +135,31 @@ export default function NotificationsPage() {
               borderRadius: "12px",
             }}
           >
-            {/* Select User */}
+            {/* SELECT RECEIVER */}
             <div className="mb-3">
               <label className="form-label fw-semibold">Select Member</label>
               <select
                 className="form-select"
-                value={userId}
-                onChange={(e) => setUserId(e.target.value)}
+                value={receiverId}
+                onChange={(e) => setReceiverId(e.target.value)}
               >
                 <option value="all">
-                  Send to ALL Members of Gym ({gymCode})
+                  Send to ALL Members of Gym ({gymCode || "—"})
                 </option>
 
-                {users.map((u) => (
-                  <option key={u._id} value={u._id}>
-                    {u.fullName} ({u.email})
-                  </option>
-                ))}
+                {users.length > 0 ? (
+                  users.map((u) => (
+                    <option key={u._id} value={u._id}>
+                      {u.fullName || "No Name"} ({u.email || "No Email"})
+                    </option>
+                  ))
+                ) : (
+                  <option disabled>No users registered in this gym</option>
+                )}
               </select>
             </div>
 
-            {/* Title */}
+            {/* TITLE */}
             <div className="mb-3">
               <label className="form-label fw-semibold">Title</label>
               <input
@@ -164,7 +171,7 @@ export default function NotificationsPage() {
               />
             </div>
 
-            {/* Message */}
+            {/* MESSAGE */}
             <div className="mb-3">
               <label className="form-label fw-semibold">Message</label>
               <textarea
@@ -176,7 +183,7 @@ export default function NotificationsPage() {
               ></textarea>
             </div>
 
-            {/* Submit */}
+            {/* SEND */}
             <button
               className="btn btn-primary w-100"
               onClick={sendNotification}

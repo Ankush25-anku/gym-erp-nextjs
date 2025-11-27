@@ -1,52 +1,47 @@
 const express = require("express");
-const GymApproval = require("../models/GymApproval");
 const admin = require("../firebaseAdmin");
 const ClerkUser = require("../models/ClerkUser");
 const verifyClerkToken = require("../middleware/verifyClerkToken");
-
 const router = express.Router();
 
 router.post("/send", verifyClerkToken, async (req, res) => {
-  const { userId, title, body, gymCode } = req.body;
-
-  if (!title || !body || !gymCode) {
-    return res.status(400).json({ success: false, message: "title, body, gymCode required" });
-  }
+  const { userId, title, message } = req.body;
 
   try {
     let tokens = [];
 
     if (userId === "all") {
-      const gymUsers = await ClerkUser.find({ gymCode });
-      tokens = [...new Set(gymUsers.flatMap(u => u.fcmTokens.map(f => f.token)))];
+      const users = await ClerkUser.find({
+        fcmToken: { $exists: true, $ne: "" },
+      });
+      tokens = users.map((u) => u.fcmToken);
     } else {
-      const gymUser = await ClerkUser.findById(userId);
-      if (!gymUser || gymUser.gymCode !== gymCode) {
-        return res.status(403).json({ success: false, message: "User not in this gym" });
+      const user = await ClerkUser.findById(userId);
+      if (user?.fcmToken) {
+        tokens = [user.fcmToken];
       }
-      tokens = gymUser.fcmTokens.map(f => f.token);
     }
 
-    if (!tokens.length) {
-      return res.json({ success: false, message: "No FCM tokens stored for this user/gym" });
+    if (tokens.length === 0) {
+      return res.json({
+        success: false,
+        message: "No users found with FCM token",
+      });
     }
 
-    const result = await admin.messaging().sendEachForMulticast({
+    await admin.messaging().sendEachForMulticast({
       tokens,
-      notification: { title, body }
+      notification: { title, body: message },
     });
 
-    return res.json({
+    res.json({
       success: true,
       sentBy: req.clerkUser.email,
-      resultCount: result.successCount,
-      failureCount: result.failureCount,
-      message: "Notification sent successfully ✅"
+      message: "Notification sent successfully",
     });
-
   } catch (err) {
-    console.error("❌ Notification send:", err.message);
-    res.status(500).json({ success:false, message:"Server error" });
+    console.error("❌ Error sending notification:", err);
+    res.status(500).json({ success: false, err });
   }
 });
 

@@ -8,142 +8,120 @@ const GymApproval = require("../models/GymApproval");
 router.post("/sync", verifyClerkToken, async (req, res) => {
   try {
     const { sub, email: clerkEmail, first_name, last_name } = req.clerkUser;
-    const { gymCode, fcmToken, platform } = req.body;
+    const {
+      schoolCode,
+      fullName,
+      email,
+      phone,
+      gender,
 
-    // Final computed name
+      dob,
+      address,
+      city,
+      state,
+      country,
+      zipcode,
+      imageUrl,
+      additionalInfo,
+      role,
+    } = req.body;
+
     const finalFullName =
+      fullName?.trim() ||
       `${first_name || ""} ${last_name || ""}`.trim() ||
-      clerkEmail.split("@")[0];
+      (email ? email.split("@")[0] : "");
 
-    const finalEmail = clerkEmail.toLowerCase().trim();
-
-    const updatePayload = {
-      sub,
-      email: finalEmail,
-      first_name,
-      last_name,
-      fullName: finalFullName,
-      role: "member",
-      phone: "",
-      imageUrl: "",
-      additionalInfo: "",
-      gymCode: gymCode || "",
-    };
-
-    // 🔥 Add FCM token into fcmTokens array (avoid duplicates) ✅
-    if (fcmToken) {
-      updatePayload.$addToSet = {
-        fcmTokens: {
-          token: fcmToken,
-          platform: platform || "web",
-          createdAt: new Date(),
-        },
-      };
-    }
+    const finalEmail = email || clerkEmail;
 
     const updatedUser = await ClerkUser.findOneAndUpdate(
       { sub },
-      updatePayload,
+      {
+        sub,
+        email: finalEmail,
+        first_name,
+        last_name,
+        fullName: finalFullName,
+        role,
+        phone: phone || "",
+        gender: gender || "",
+        dob: dob || "",
+        schoolCode: schoolCode || "",
+        requestAdminAccess: req.body.requestAdminAccess || false,
+        address: address || "",
+        city: city || "",
+        state: state || "",
+        country: country || "",
+        zipcode: zipcode || "",
+        imageUrl: imageUrl || "",
+        additionalInfo: additionalInfo || "",
+      },
       { upsert: true, new: true }
     );
 
-    res.json({
-      success: true,
-      message: "User profile synced successfully ✅",
-      tokensStored: updatedUser.fcmTokens.length,
-      user: updatedUser,
-    });
+    res.json(updatedUser);
   } catch (err) {
     console.error("🔴 Sync Error:", err);
-    res.status(500).json({ success: false, message: "Failed to sync user" });
+    res.status(500).json({ error: "Failed to sync Clerk user" });
   }
 });
 
-// ---------------------------------
-// 🙋‍♂️ Get logged in user ✅
-// ---------------------------------
+// 🙋‍♂️ Get logged-in Clerk user info
 router.get("/me", verifyClerkToken, async (req, res) => {
   try {
-    const { sub, email, role, fullName } = req.clerkUser;
+    const { sub, role, email, fullName } = req.clerkUser;
 
+    // Try by sub first
     let user = await ClerkUser.findOne({ sub });
+
+    // If not found, try by email
     if (!user && email) {
-      user = await ClerkUser.findOne({ email: email.toLowerCase().trim() });
+      user = await ClerkUser.findOne({ email });
     }
 
+    // 🧩 Auto-fix missing fullName in DB
+    if (user && !user.fullName) {
+      user.fullName =
+        `${req.clerkUser.first_name || ""} ${
+          req.clerkUser.last_name || ""
+        }`.trim() || "";
+      await user.save();
+      console.log("🧩 Auto-fixed missing fullName for:", user.email);
+    }
+
+    // If still not found, fallback
     if (!user) {
-      return res.json({ sub, email, role, fullName });
+      return res.json({
+        sub,
+        email,
+        role: role || "user",
+        fullName: fullName || "User",
+      });
     }
 
     res.json({
       _id: user._id,
       sub: user.sub,
       email: user.email,
-      role: user.role,
-      fullName: user.fullName,
-      gymCode: user.gymCode,
-      fcmTokens: user.fcmTokens,
-      phone: user.phone,
-      gender: user.gender,
-      dob: user.dob,
-      address: user.address,
-      city: user.city,
-      state: user.state,
-      country: user.country,
-      zipcode: user.zipcode,
-      imageUrl: user.imageUrl,
+      role: user.role || role || "user",
+      fullName: user.fullName || fullName || "User",
+      phone: user.phone || "",
+      gender: user.gender || "",
+      dob: user.dob || "",
+      gymCode: user.gymCode || "",
+      address: user.address || "",
+      city: user.city || "",
+      state: user.state || "",
+      country: user.country || "",
+      zipcode: user.zipcode || "",
+      imageUrl: user.imageUrl || "",
+      additionalInfo: user.additionalInfo || "",
     });
   } catch (err) {
-    console.error("❌ Error fetching /me:", err.message);
-    res.status(500).json({ success: false });
+    console.error("🔴 /me route error:", err);
+    res.status(500).json({ error: "Server error" });
   }
 });
-
-// ---------------------------------------------------
-// 👥 Get ALL USERS that belong to *approved gym* ✅
-// ---------------------------------------------------
-router.get("/by-gym/:gymCode", verifyClerkToken, async (req, res) => {
-  try {
-    const { gymCode } = req.params;
-    if (!gymCode) return res.status(400).json([]);
-
-    // Step 1: Get all approved emails for this gym
-    const approvals = await GymApproval.find({ gymCode, status: "approved" });
-    if (!approvals.length) return res.json([]);
-
-    const approvedEmails = approvals.map((a) => a.adminEmail.toLowerCase());
-
-    // Step 2: Find users of this gym in ClerkUser who have fcmTokens
-    const gymUsers = await ClerkUser.find({
-      email: { $in: approvedEmails },
-      gymCode,
-    });
-
-    // Collect unique device tokens
-    const tokens = [
-      ...new Set(gymUsers.flatMap((u) => u.fcmTokens.map((f) => f.token))),
-    ];
-
-    return res.json({
-      success: true,
-      gymCode,
-      memberCount: gymUsers.length,
-      tokenCount: tokens.length,
-      fcmTokens: tokens,
-      members: gymUsers.map((u) => ({
-        _id: u._id,
-        fullName: u.fullName,
-        email: u.email,
-        role: u.role,
-        fcmTokenCount: u.fcmTokens.length,
-      })),
-    });
-  } catch (err) {
-    console.error("❌ Fetch by gym:", err.message);
-    res.status(500).json([]);
-  }
-});
-
+// routes/clerkUsers.js
 router.get("/get-role", verifyClerkToken, async (req, res) => {
   try {
     const { sub, email, first_name, last_name, role } = req.clerkUser;
@@ -186,5 +164,37 @@ router.get("/get-role", verifyClerkToken, async (req, res) => {
 });
 
 // 🔥 Get all Clerk Users belonging to a specific gym
+router.get("/by-gym/:gymCode", verifyClerkToken, async (req, res) => {
+  try {
+    const { gymCode } = req.params;
+
+    if (!gymCode) {
+      return res.status(400).json({ error: "Gym code is required" });
+    }
+
+    // 1️⃣ Find approved users for this gym using GymApproval
+    const approvals = await GymApproval.find({
+      gymCode,
+      status: "approved",
+    });
+
+    if (!approvals.length) {
+      return res.json([]); // no users
+    }
+
+    // 2️⃣ Extract all approved emails
+    const emails = approvals.map((u) => u.adminEmail.toLowerCase());
+
+    // 3️⃣ Fetch ClerkUser details
+    const users = await ClerkUser.find({
+      email: { $in: emails },
+    }).select("fullName email role imageUrl fcmToken");
+
+    res.json(users);
+  } catch (err) {
+    console.error("🔥 Error fetching users by gym:", err);
+    res.status(500).json({ error: "Failed to fetch users by gym" });
+  }
+});
 
 module.exports = router;

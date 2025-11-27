@@ -319,8 +319,8 @@ function mountRoutes() {
   app.use("/api/employees", require("./Routes/employeeRoutes"));
   app.use("/api/staff-approvals", require("./Routes/staffApprovalRoutes"));
   // 🔐 Clerk FCM routes (device registration)
-app.use("/api/clerkusers/fcm", require("./Routes/clerkFcmRoutes"));
-app.use("/api/notifications", require("./Routes/notificationRoutes")); // 👈 for your /send route
+  app.use("/api/users", require("./Routes/save-fcm-token"));
+  app.use("/api/notifications", require("./Routes/notificationRoutes")); // 👈 for your /send route
 
   app.use(
     "/api/admin/staff-attendance",
