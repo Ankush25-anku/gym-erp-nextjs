@@ -107,46 +107,39 @@ router.get("/by-gym/:gymCode", verifyClerkToken, async (req, res) => {
     const { gymCode } = req.params;
     if (!gymCode) return res.status(400).json([]);
 
-    // ✅ Step 1 → Get approved emails for this gym (from approval model)
-    const approvals = await GymApproval.find({
-      gymCode,
-      status: "approved",
-    });
+    // Step 1: Get all approved emails for this gym
+    const approvals = await GymApproval.find({ gymCode, status: "approved" });
     if (!approvals.length) return res.json([]);
 
     const approvedEmails = approvals.map((a) => a.adminEmail.toLowerCase());
 
-    // ✅ Step 2 → Fetch users from ClerkUser that belong to this gym by email
-    const users = await ClerkUser.find({
+    // Step 2: Find users of this gym in ClerkUser who have fcmTokens
+    const gymUsers = await ClerkUser.find({
       email: { $in: approvedEmails },
-      gymCode: gymCode,
-      "fcmTokens.token": { $exists: true, $ne: "" }, // ensures they have at least one valid FCM token
+      gymCode,
     });
 
-    // ✅ Extract unique tokens for broadcast
-    const uniqueTokens = [
-      ...new Set(users.flatMap((u) => u.fcmTokens.map((f) => f.token))),
+    // Collect unique device tokens
+    const tokens = [
+      ...new Set(gymUsers.flatMap((u) => u.fcmTokens.map((f) => f.token))),
     ];
 
-    const formatted = users.map((u) => ({
-      _id: u._id,
-      fullName: u.fullName,
-      email: u.email,
-      role: u.role,
-      imageUrl: u.imageUrl,
-      fcmTokenCount: u.fcmTokens.length,
-    }));
-
-    res.json({
+    return res.json({
       success: true,
       gymCode,
-      resultCount: formatted.length,
-      tokensReady: uniqueTokens.length,
-      members: formatted,
-      fcmTokens: uniqueTokens, // 👈 used for FCM send API
+      memberCount: gymUsers.length,
+      tokenCount: tokens.length,
+      fcmTokens: tokens,
+      members: gymUsers.map((u) => ({
+        _id: u._id,
+        fullName: u.fullName,
+        email: u.email,
+        role: u.role,
+        fcmTokenCount: u.fcmTokens.length,
+      })),
     });
   } catch (err) {
-    console.error("❌ Gym fetch:", err.message);
+    console.error("❌ Fetch by gym:", err.message);
     res.status(500).json([]);
   }
 });

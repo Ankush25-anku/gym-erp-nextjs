@@ -10,65 +10,43 @@ router.post("/send", verifyClerkToken, async (req, res) => {
   const { userId, title, body, gymCode } = req.body;
 
   if (!title || !body || !gymCode) {
-    return res
-      .status(400)
-      .json({ success: false, message: "Title, body & gymCode are required" });
+    return res.status(400).json({ success: false, message: "title, body, gymCode required" });
   }
 
   try {
     let tokens = [];
 
-    // ✅ Collect users by gymApproval emails only
-    const approvals = await GymApproval.find({
-      gymCode,
-      status: "approved",
-    }).select("adminEmail");
-    const emails = approvals.map((a) => a.adminEmail.toLowerCase());
-
-    const users = await ClerkUser.find({ email: { $in: emails } }).select(
-      "fcmTokens"
-    );
-
     if (userId === "all") {
-      tokens = users.flatMap((u) => u.fcmTokens.map((t) => t.token));
+      const gymUsers = await ClerkUser.find({ gymCode });
+      tokens = [...new Set(gymUsers.flatMap(u => u.fcmTokens.map(f => f.token)))];
     } else {
-      const targetUser = await ClerkUser.findById(userId);
-      if (
-        !targetUser ||
-        emails.includes(targetUser.email.toLowerCase()) === false
-      ) {
-        return res
-          .status(403)
-          .json({
-            success: false,
-            message: "User not in this gym approval list",
-          });
+      const gymUser = await ClerkUser.findById(userId);
+      if (!gymUser || gymUser.gymCode !== gymCode) {
+        return res.status(403).json({ success: false, message: "User not in this gym" });
       }
-      tokens = targetUser.fcmTokens.map((t) => t.token);
+      tokens = gymUser.fcmTokens.map(f => f.token);
     }
 
-    if (tokens.length === 0) {
-      return res.json({
-        success: false,
-        message: "No FCM tokens found for this gym/users",
-      });
+    if (!tokens.length) {
+      return res.json({ success: false, message: "No FCM tokens stored for this user/gym" });
     }
 
-    const result = await admin
-      .messaging()
-      .sendEachForMulticast({ tokens, notification: { title, body } });
+    const result = await admin.messaging().sendEachForMulticast({
+      tokens,
+      notification: { title, body }
+    });
 
     return res.json({
       success: true,
       sentBy: req.clerkUser.email,
       resultCount: result.successCount,
-      message: "Notification sent successfully",
+      failureCount: result.failureCount,
+      message: "Notification sent successfully ✅"
     });
+
   } catch (err) {
-    console.error("❌ Send route:", err.message);
-    return res
-      .status(500)
-      .json({ success: false, message: "Server error sending notification" });
+    console.error("❌ Notification send:", err.message);
+    res.status(500).json({ success:false, message:"Server error" });
   }
 });
 
