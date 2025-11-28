@@ -12,11 +12,13 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Firebase / Secret keys (MUST NOT BE COMMITTED)
-firebase-service-account.json*
-firebase-service-account.JSON*
-backend/utils/firebase-key.json*
-*.service-account.json*
+# ❗ Firebase / Secret keys (MUST NOT BE COMMITTED)
+backend/utils/firebase-key.json
+backend/utils/firebase*.json
+firebase-key.json
+*.service-account.json
+*.pem
+*.pem.key
 
 # Local file uploads (if any)
 uploads/
