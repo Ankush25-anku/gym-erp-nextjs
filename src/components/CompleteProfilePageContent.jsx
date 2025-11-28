@@ -30,27 +30,10 @@ export default function CompleteProfilePageContent() {
     zipcode: "",
     imageUrl: "",
     additionalInfo: "",
-    requestAdminAccess: false,
+    requestAdminAccess: false, // ✅ Added field for staff
   });
 
-  // ✅ Step 1: Store Clerk userId in localStorage for WebView & send to React Native
-  useEffect(() => {
-    if (isUserLoaded && user) {
-      const clerkUserId = user.id;
-      localStorage.setItem("userId", clerkUserId); // ✅ allow WebView to read it
-      console.log("🧠 Clerk User ID saved:", clerkUserId);
-
-      // ✅ Actively send userId to React Native WebView
-      if (window.ReactNativeWebView) {
-        window.ReactNativeWebView.postMessage(
-          JSON.stringify({ userId: clerkUserId })
-        );
-        console.log("📲 Clerk userId posted to React Native");
-      }
-    }
-  }, [isUserLoaded, user]);
-
-  // ✅ Auto-fill logged-in user data
+  // ✅ Auto-fill user data from Clerk
   useEffect(() => {
     if (isUserLoaded && user) {
       setProfileData((prev) => ({
@@ -62,7 +45,7 @@ export default function CompleteProfilePageContent() {
     }
   }, [isUserLoaded, user]);
 
-  // ✅ Handle inputs properly + Phone validation
+  // ✅ Handle input + file + checkbox
   const handleInputChange = (e) => {
     const { name, value, files, type, checked } = e.target;
 
@@ -74,42 +57,36 @@ export default function CompleteProfilePageContent() {
         setProfileData((p) => ({ ...p, imageUrl: reader.result }));
       reader.readAsDataURL(files[0]);
     } else if (name === "phone") {
-      let numericValue = value.replace(/\D/g, "");
-
-      if (numericValue.length > 10) {
+      // ✅ If any non-digit character is typed
+      if (/[^0-9]/.test(value)) {
+        setPhoneError("Please type only numbers (0–9)");
+      } else if (value.length > 10) {
         setPhoneError("Please enter only 10 digits");
-      } else if (numericValue.length < 10 && numericValue.length > 0) {
+      } else if (value.length < 10 && value.length > 0) {
         setPhoneError("Phone number must be 10 digits");
       } else {
         setPhoneError("");
       }
 
+      // ✅ Always keep only numeric characters in state
+      const numericValue = value.replace(/\D/g, "");
       setProfileData((p) => ({ ...p, phone: numericValue }));
     } else {
       setProfileData((p) => ({ ...p, [name]: value }));
     }
   };
 
-  // ✅ Submit profile data
+  // ✅ Submit Profile
   const handleSubmitProfile = async (e) => {
     e.preventDefault();
     setLoading(true);
-
     if (!/^\d{10}$/.test(profileData.phone)) {
       setLoading(false);
-      Alert.alert(
-        "Invalid Phone",
-        "Please enter a valid 10-digit phone number."
+      window.alert(
+        "Please enter a valid 10-digit phone number using digits only."
       );
       return;
     }
-
-    const roleRedirect = {
-      superadmin: "/memberRole/dashboard",
-      admin: "/admin-dashboard",
-      member: "/member/dashboard",
-      staff: "/staff/dashboard",
-    };
 
     try {
       const token = await getToken();
@@ -130,20 +107,74 @@ export default function CompleteProfilePageContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to save profile");
 
-      // ✅ Save role and fullName consistently
-      localStorage.setItem("userFullName", profileData.fullName.trim());
-      localStorage.setItem("userRole", role); // store exact role key ✅
+      // ✅ Store role & fullName consistently
+      const fullName = profileData.fullName || "";
+      localStorage.setItem("userFullName", fullName);
 
-      console.log("✅ Profile saved!");
+      if (role) {
+        localStorage.setItem("userRole", role.toLowerCase());
+      } else if (profileData.requestAdminAccess) {
+        localStorage.setItem("userRole", "admin");
+      } else {
+        localStorage.setItem("userRole", "staff");
+      }
 
-      router.push(roleRedirect[role] || "/");
+      // ✅ Redirect based on role
+      const redirectMap = {
+        member: "/memberRole/dashboard",
+        admin: "/admin-dashboard",
+        superadmin: "/superadmin",
+        staff: "/staff/dashboard",
+      };
+
+      router.push(redirectMap[role] || "/");
     } catch (err) {
-      console.error("❌ Profile Sync Error:", err.message);
+      console.error("Error saving profile:", err);
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    const sendMongoIdToNative = async () => {
+      try {
+        const token = await getToken();
+        if (!token) return;
+
+        const res = await axios.get(`${API_BASE}/api/clerkusers/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        const mongo_id = res.data?._id;
+        const clerkId = res.data?.sub;
+
+        if (mongo_id && clerkId && typeof window !== "undefined") {
+          localStorage.setItem("userMongoId", mongo_id);
+          localStorage.setItem("userClerkId", clerkId);
+          localStorage.setItem("userId", mongo_id);
+
+          console.log("🟣 Mongo _id:", mongo_id);
+
+          // 📩 Send to React Native WebView
+          window.ReactNativeWebView?.postMessage(
+            JSON.stringify({ userMongoId: mongo_id })
+          );
+        }
+      } catch (err) {
+        console.error(
+          "⚠ Image fetch failed:",
+          err.response?.status,
+          err.response?.data
+        );
+      }
+    };
+
+    if (isUserLoaded && user) {
+      sendMongoIdToNative();
+    }
+  }, [isUserLoaded, user]);
+
+  // ✅ Form Layout (same for all roles)
   return (
     <div className="container py-5">
       <div className="col-md-8 mx-auto">
@@ -249,6 +280,8 @@ export default function CompleteProfilePageContent() {
                 </div>
 
                 {/* Phone */}
+                {/* Phone */}
+                {/* Phone */}
                 <div className="col-md-6">
                   <label className="form-label">Phone Number</label>
                   <div className="input-group">
@@ -314,9 +347,9 @@ export default function CompleteProfilePageContent() {
                   />
                 </div>
 
-                {/* City */}
+                {/* City & State */}
                 <div className="col-md-6">
-                  <label>City</label>
+                  <label className="form-label">City</label>
                   <input
                     name="city"
                     className="form-control"
@@ -326,9 +359,8 @@ export default function CompleteProfilePageContent() {
                   />
                 </div>
 
-                {/* State */}
                 <div className="col-md-6">
-                  <label>State</label>
+                  <label className="form-label">State</label>
                   <input
                     name="state"
                     className="form-control"
@@ -338,9 +370,9 @@ export default function CompleteProfilePageContent() {
                   />
                 </div>
 
-                {/* Country */}
+                {/* Country & Zip */}
                 <div className="col-md-6">
-                  <label>Country</label>
+                  <label className="form-label">Country</label>
                   <input
                     name="country"
                     className="form-control"
@@ -350,9 +382,8 @@ export default function CompleteProfilePageContent() {
                   />
                 </div>
 
-                {/* Zip Code */}
                 <div className="col-md-6">
-                  <label>Zip Code</label>
+                  <label className="form-label">Zip Code</label>
                   <input
                     name="zipcode"
                     className="form-control"
@@ -364,31 +395,36 @@ export default function CompleteProfilePageContent() {
 
                 {/* Additional Info */}
                 <div className="col-12">
-                  <label>Additional Info</label>
+                  <label className="form-label">Additional Info</label>
                   <textarea
                     name="additionalInfo"
                     className="form-control"
-                    rows={3}
                     placeholder="Write something about yourself..."
                     value={profileData.additionalInfo}
                     onChange={handleInputChange}
-                  ></textarea>
+                    rows="3"
+                  />
                 </div>
 
-                {/* Staff Request Checkbox */}
+                {/* ✅ Show only if role is staff */}
                 {role === "staff" && (
-                  <div className="col-12 form-check mt-2">
-                    <input
-                      type="checkbox"
-                      name="requestAdminAccess"
-                      id="requestAdminAccess"
-                      className="form-check-input"
-                      checked={profileData.requestAdminAccess}
-                      onChange={handleInputChange}
-                    />
-                    <label htmlFor="requestAdminAccess">
-                      Request for Admin Access
-                    </label>
+                  <div className="col-12 mt-2">
+                    <div className="form-check">
+                      <input
+                        type="checkbox"
+                        name="requestAdminAccess"
+                        id="requestAdminAccess"
+                        className="form-check-input"
+                        checked={profileData.requestAdminAccess}
+                        onChange={handleInputChange}
+                      />
+                      <label
+                        htmlFor="requestAdminAccess"
+                        className="form-check-label"
+                      >
+                        Request for admin access
+                      </label>
+                    </div>
                   </div>
                 )}
 

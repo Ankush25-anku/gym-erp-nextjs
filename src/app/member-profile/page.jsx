@@ -4,18 +4,16 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useUser, useAuth } from "@clerk/nextjs";
 import { Icon } from "@iconify/react";
-import { Alert } from "react-native"; // Only if needed for cross-platform alerts (optional)
 
 export default function MemberProfilePage() {
-  const { user, isLoaded } = useUser();
+  const { user, isLoaded: isUserLoaded } = useUser();
   const { getToken } = useAuth();
   const router = useRouter();
 
   const [loading, setLoading] = useState(false);
-  const [phoneError, setPhoneError] = useState("");
+  const [phoneError, setPhoneError] = useState(""); // ✅ validation state
 
   const [profileData, setProfileData] = useState({
-    userId: "", // ✅ auto stored
     fullName: "",
     email: "",
     phone: "",
@@ -30,45 +28,36 @@ export default function MemberProfilePage() {
     membershipGoal: "",
   });
 
-  // ✅ Auto-fill Clerk userId + name + email (no input required)
+  // ✅ Auto-fill Clerk data
   useEffect(() => {
-    if (isLoaded && user) {
-      const clerkUserId = user.id;
-      console.log("🧠 Member Clerk UserID:", clerkUserId);
-
-      // Store in localStorage for WebView / React Native bridging if needed
-      if (typeof window !== "undefined") {
-        localStorage.setItem("userId", clerkUserId);
-      }
-
+    if (isUserLoaded && user) {
       setProfileData((prev) => ({
         ...prev,
-        userId: clerkUserId,
         fullName: `${user.firstName || ""} ${user.lastName || ""}`.trim(),
         email: user.primaryEmailAddress?.emailAddress || "",
         imageUrl: user.imageUrl || "",
       }));
-
-      // Optional: send to native WebView listeners (RN)
-      window.ReactNativeWebView?.postMessage(
-        JSON.stringify({ userId: clerkUserId })
-      );
     }
-  }, [isLoaded, user]);
+  }, [isUserLoaded, user]);
 
-  // ✅ Handle inputs + file + phone validation
+  // ✅ Input handler (with phone validation)
   const handleInputChange = (e) => {
-    const { name, value, files, type, checked } = e.target;
+    const { name, value, files } = e.target;
 
     if (name === "phone") {
-      const numericValue = value.replace(/\D/g, "");
-      if (numericValue.length > 10) {
+      const numericValue = value.replace(/\D/g, ""); // remove non-digits
+
+      // ✅ Validation messages
+      if (/[^0-9]/.test(value)) {
+        setPhoneError("Please type only numbers (0–9)");
+      } else if (numericValue.length > 10) {
         setPhoneError("Phone number cannot exceed 10 digits");
       } else if (numericValue.length < 10 && numericValue.length > 0) {
         setPhoneError("Phone number must be exactly 10 digits");
       } else {
         setPhoneError("");
       }
+
       setProfileData((p) => ({ ...p, phone: numericValue }));
       return;
     }
@@ -79,18 +68,26 @@ export default function MemberProfilePage() {
         setProfileData((p) => ({ ...p, imageUrl: reader.result }));
       reader.readAsDataURL(files[0]);
     } else {
-      setProfileData((p) => ({
-        ...p,
-        [name]: type === "checkbox" ? checked : value,
-      }));
+      setProfileData((p) => ({ ...p, [name]: value }));
     }
   };
 
-  // ✅ Save profile on submit
+  // ✅ Block non-numeric keypresses
+  const handleKeyDown = (e) => {
+    if (!/[0-9]|Backspace|Tab|ArrowLeft|ArrowRight|Delete/.test(e.key)) {
+      e.preventDefault();
+      setPhoneError("Only numeric input allowed (0–9)");
+    } else {
+      setPhoneError("");
+    }
+  };
+
+  // ✅ Save profile
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
+    // ✅ Validate phone before submitting
     if (!/^\d{10}$/.test(profileData.phone)) {
       setLoading(false);
       setPhoneError("Please enter a valid 10-digit phone number.");
@@ -99,45 +96,32 @@ export default function MemberProfilePage() {
 
     try {
       const token = await getToken();
-      const apiUrl = `${
-        process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
-      }/api/clerkusers/sync`;
 
-      console.log("🌐 POST →", apiUrl);
-      console.log("📦 Payload:", profileData); // ✅ contains userId automatically
+      const res = await fetch(
+        `${
+          process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
+        }/api/clerkusers/sync`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ ...profileData, role: "member" }),
+        }
+      );
 
-      const res = await fetch(apiUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ ...profileData, role: "member" }),
-      });
+      const data = await res.json();
+      if (!res.ok)
+        throw new Error(data.message || "Failed to save member profile");
 
-      const text = await res.text();
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        console.error("❌ Server Response:", text);
-        throw new Error("Server did not return JSON. Check API route.");
-      }
+      localStorage.setItem("userRole", "member");
+      localStorage.setItem("userFullName", profileData.fullName);
 
-      if (!res.ok) throw new Error(data.message || data.error || "Failed");
-
-      console.log("✅ Profile saved:", data);
-
-      // ✅ Update localStorage role/fullname immediately for UI
-      if (typeof window !== "undefined") {
-        localStorage.setItem("userRole", "member");
-        localStorage.setItem("userFullName", profileData.fullName);
-      }
-
-      router.push("/member/dashboard");
+      // ✅ Redirect to member dashboard
+      router.push("/member");
     } catch (err) {
-      console.error("❌ Submit Error:", err.message);
-      alert(err.message);
+      console.error("Error saving member profile:", err);
     } finally {
       setLoading(false);
     }
@@ -152,7 +136,7 @@ export default function MemberProfilePage() {
           </div>
 
           <div className="card-body p-4">
-            {/* Avatar Upload */}
+            {/* Profile Image */}
             <div className="text-center mb-4">
               <div className="position-relative d-inline-block">
                 {profileData.imageUrl ? (
@@ -195,6 +179,7 @@ export default function MemberProfilePage() {
             {/* Form */}
             <form onSubmit={handleSubmit}>
               <div className="row g-3">
+                {/* Full Name */}
                 <div className="col-md-6">
                   <label className="form-label">Full Name</label>
                   <input
@@ -203,21 +188,23 @@ export default function MemberProfilePage() {
                     placeholder="Your Name"
                     value={profileData.fullName}
                     onChange={handleInputChange}
-                    readOnly // optional, remove if you want this editable
                   />
                 </div>
 
+                {/* Email */}
                 <div className="col-md-6">
                   <label className="form-label">Email</label>
                   <input
                     name="email"
                     type="email"
                     className="form-control"
+                    placeholder="info@gmail.com"
                     value={profileData.email}
-                    readOnly
+                    onChange={handleInputChange}
                   />
                 </div>
 
+                {/* Phone */}
                 <div className="col-md-6">
                   <label className="form-label">Phone Number</label>
                   <input
@@ -227,25 +214,17 @@ export default function MemberProfilePage() {
                     placeholder="Enter 10-digit number"
                     value={profileData.phone}
                     onChange={handleInputChange}
-                    onKeyDown={(e) => {
-                      if (
-                        !/[0-9]|Backspace|Delete|Tab|ArrowLeft|ArrowRight/.test(
-                          e.key
-                        )
-                      ) {
-                        e.preventDefault();
-                        setPhoneError("Only digits allowed (0-9)");
-                      } else setPhoneError("");
-                    }}
+                    onKeyDown={handleKeyDown}
                     maxLength={10}
                     inputMode="numeric"
                     pattern="[0-9]*"
                   />
                   {phoneError && (
-                    <div className="text-danger small mt-1">{phoneError}</div>
+                    <div className="invalid-feedback d-block">{phoneError}</div>
                   )}
                 </div>
 
+                {/* Gender */}
                 <div className="col-md-6">
                   <label className="form-label">Gender</label>
                   <select
@@ -273,12 +252,13 @@ export default function MemberProfilePage() {
                   />
                 </div>
 
-                {/* Goal */}
+                {/* Membership Goal */}
                 <div className="col-md-6">
                   <label className="form-label">Fitness Goal</label>
                   <input
                     name="membershipGoal"
                     className="form-control"
+                    placeholder="Weight loss, Muscle gain, etc."
                     value={profileData.membershipGoal}
                     onChange={handleInputChange}
                   />
@@ -286,16 +266,19 @@ export default function MemberProfilePage() {
 
                 {/* Address */}
                 <div className="col-12">
-                  <label>Address</label>
+                  <label className="form-label">Address</label>
                   <input
                     name="address"
                     className="form-control"
+                    placeholder="Street, Apartment, etc."
                     value={profileData.address}
                     onChange={handleInputChange}
                   />
                 </div>
+
+                {/* City / State / Country / Zip */}
                 <div className="col-md-6">
-                  <label>City</label>
+                  <label className="form-label">City</label>
                   <input
                     name="city"
                     className="form-control"
@@ -303,8 +286,9 @@ export default function MemberProfilePage() {
                     onChange={handleInputChange}
                   />
                 </div>
+
                 <div className="col-md-6">
-                  <label>State</label>
+                  <label className="form-label">State</label>
                   <input
                     name="state"
                     className="form-control"
@@ -312,8 +296,9 @@ export default function MemberProfilePage() {
                     onChange={handleInputChange}
                   />
                 </div>
+
                 <div className="col-md-6">
-                  <label>Country</label>
+                  <label className="form-label">Country</label>
                   <input
                     name="country"
                     className="form-control"
@@ -321,8 +306,9 @@ export default function MemberProfilePage() {
                     onChange={handleInputChange}
                   />
                 </div>
+
                 <div className="col-md-6">
-                  <label>Zip</label>
+                  <label className="form-label">Zip Code</label>
                   <input
                     name="zipcode"
                     className="form-control"

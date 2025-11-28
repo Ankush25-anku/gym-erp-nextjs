@@ -7,14 +7,19 @@ const GymApproval = require("../models/GymApproval");
 // 🔁 Sync Clerk user to MongoDB with full profile
 router.post("/sync", verifyClerkToken, async (req, res) => {
   try {
-    const { sub, email: clerkEmail, first_name, last_name } = req.clerkUser;
+    const {
+      sub,
+      email: clerkEmail,
+      first_name,
+      last_name,
+      role,
+    } = req.clerkUser;
     const {
       schoolCode,
       fullName,
       email,
       phone,
       gender,
-
       dob,
       address,
       city,
@@ -23,45 +28,79 @@ router.post("/sync", verifyClerkToken, async (req, res) => {
       zipcode,
       imageUrl,
       additionalInfo,
-      role,
+      requestAdminAccess,
     } = req.body;
 
     const finalFullName =
       fullName?.trim() ||
       `${first_name || ""} ${last_name || ""}`.trim() ||
-      (email ? email.split("@")[0] : "");
+      (clerkEmail ? clerkEmail.split("@")[0] : "");
 
-    const finalEmail = email || clerkEmail;
+    const finalEmail = email?.toLowerCase() || clerkEmail.toLowerCase();
 
-    const updatedUser = await ClerkUser.findOneAndUpdate(
-      { sub },
-      {
+    let user = await ClerkUser.findOne({ sub });
+
+    if (!user) {
+      // Mongo will auto generate _id here ✅ so we don't need it from frontend
+      user = await ClerkUser.create({
         sub,
         email: finalEmail,
         first_name,
         last_name,
         fullName: finalFullName,
         role,
-        phone: phone || "",
-        gender: gender || "",
-        dob: dob || "",
+        phone,
+        gender,
+        dob,
         schoolCode: schoolCode || "",
-        requestAdminAccess: req.body.requestAdminAccess || false,
-        address: address || "",
-        city: city || "",
-        state: state || "",
-        country: country || "",
-        zipcode: zipcode || "",
+        requestAdminAccess: requestAdminAccess || false,
+        address,
+        city,
+        state,
+        country,
+        zipcode,
         imageUrl: imageUrl || "",
-        additionalInfo: additionalInfo || "",
-      },
-      { upsert: true, new: true }
-    );
+        additionalInfo,
+      });
 
-    res.json(updatedUser);
+      console.log("🟢 New ClerkUser created with Mongo _id:", user._id);
+    } else {
+      // Update existing user ✅ _id remains same
+      user = await ClerkUser.findOneAndUpdate(
+        { sub },
+        {
+          fullName: finalFullName,
+          email: finalEmail,
+          phone,
+          gender,
+          dob,
+          schoolCode: schoolCode || "",
+          address,
+          city,
+          state,
+          country,
+          zipcode,
+          imageUrl: imageUrl || "",
+          additionalInfo,
+          requestAdminAccess: requestAdminAccess || false,
+        },
+        { new: true }
+      );
+
+      console.log("🔁 ClerkUser updated with Mongo _id:", user._id);
+    }
+
+    // ✅ Just return the DB user, containing the _id internally
+    res.json({
+      success: true,
+      user,
+      message: "Clerk user synced successfully ✅",
+    });
   } catch (err) {
     console.error("🔴 Sync Error:", err);
-    res.status(500).json({ error: "Failed to sync Clerk user" });
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to sync Clerk user ❌" });
   }
 });
 

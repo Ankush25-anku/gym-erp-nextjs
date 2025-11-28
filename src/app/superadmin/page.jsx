@@ -42,25 +42,80 @@ const SuperAdminDashboard = () => {
   const { user } = useUser();
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
-
   const fetchProfile = async () => {
     try {
       const token = await getToken();
       if (!token) throw new Error("No auth token found");
-      const res = await fetch(`${API_BASE}/api/clerkusers/me`, {
+
+      const res = await axios.get(`${API_BASE}/api/clerkusers/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error("Failed to fetch profile");
-      const data = await res.json();
+
+      const mongoId = res.data?._id;
+      const clerkId = res.data?.sub;
+      const fullName = res.data?.fullName || "User";
+      const role = res.data?.role || "member";
+      const imageUrl = res.data?.imageUrl || "";
+
+      console.log("🟣 Mongo _id:", mongoId); // ✅ You will see MongoDB _id here
+      console.log("🔵 Clerk sub:", clerkId);
+      console.log("👤 Full Name:", fullName);
+      console.log("🎖 Role:", role);
+
+      if (mongoId && typeof window !== "undefined") {
+        localStorage.setItem("userMongoId", mongoId);
+        localStorage.setItem("userClerkId", clerkId);
+        localStorage.setItem("userId", mongoId);
+        localStorage.setItem(
+          `profileImage_${role}_${res.data.email}`,
+          imageUrl
+        );
+
+        // 📩 Send Mongo _id to React Native WebView
+        window.ReactNativeWebView?.postMessage(
+          JSON.stringify({ userMongoId: mongoId })
+        );
+      }
+
       const profileWithRole = {
-        ...data,
-        role: data.publicMetadata?.role || "member",
+        ...res.data,
+        role,
       };
+
       setProfile(profileWithRole);
     } catch (err) {
-      console.error("Error fetching profile:", err);
+      console.error(
+        "❌ Profile fetch error:",
+        err.response?.status,
+        err.response?.data || err.message
+      );
     }
   };
+
+  useEffect(() => {
+    const sendMongoId = async () => {
+      const token = await getToken();
+      if (!token) return;
+
+      try {
+        const res = await axios.get(`${API_BASE}/api/clerkusers/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        const mongoId = res.data?._id;
+        if (mongoId) {
+          console.log("🔥 Dashboard loaded, Mongo user _id:", mongoId); // ✅ appears in console
+          window.ReactNativeWebView?.postMessage(
+            JSON.stringify({ userMongoId: mongoId })
+          );
+        }
+      } catch (err) {
+        console.error("❌ Mongo ID send failed:", err.message);
+      }
+    };
+
+    sendMongoId();
+  }, []);
 
   useEffect(() => {
     if (isSidebarOpen) fetchProfile();
