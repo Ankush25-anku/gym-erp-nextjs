@@ -30,10 +30,27 @@ export default function CompleteProfilePageContent() {
     zipcode: "",
     imageUrl: "",
     additionalInfo: "",
-    requestAdminAccess: false, // ✅ Added field for staff
+    requestAdminAccess: false,
   });
 
-  // ✅ Auto-fill user data from Clerk
+  // ✅ Step 1: Store Clerk userId in localStorage for WebView & send to React Native
+  useEffect(() => {
+    if (isUserLoaded && user) {
+      const clerkUserId = user.id;
+      localStorage.setItem("userId", clerkUserId); // ✅ allow WebView to read it
+      console.log("🧠 Clerk User ID saved:", clerkUserId);
+
+      // ✅ Actively send userId to React Native WebView
+      if (window.ReactNativeWebView) {
+        window.ReactNativeWebView.postMessage(
+          JSON.stringify({ userId: clerkUserId })
+        );
+        console.log("📲 Clerk userId posted to React Native");
+      }
+    }
+  }, [isUserLoaded, user]);
+
+  // ✅ Auto-fill logged-in user data
   useEffect(() => {
     if (isUserLoaded && user) {
       setProfileData((prev) => ({
@@ -45,7 +62,7 @@ export default function CompleteProfilePageContent() {
     }
   }, [isUserLoaded, user]);
 
-  // ✅ Handle input + file + checkbox
+  // ✅ Handle inputs properly + Phone validation
   const handleInputChange = (e) => {
     const { name, value, files, type, checked } = e.target;
 
@@ -57,36 +74,42 @@ export default function CompleteProfilePageContent() {
         setProfileData((p) => ({ ...p, imageUrl: reader.result }));
       reader.readAsDataURL(files[0]);
     } else if (name === "phone") {
-      // ✅ If any non-digit character is typed
-      if (/[^0-9]/.test(value)) {
-        setPhoneError("Please type only numbers (0–9)");
-      } else if (value.length > 10) {
+      let numericValue = value.replace(/\D/g, "");
+
+      if (numericValue.length > 10) {
         setPhoneError("Please enter only 10 digits");
-      } else if (value.length < 10 && value.length > 0) {
+      } else if (numericValue.length < 10 && numericValue.length > 0) {
         setPhoneError("Phone number must be 10 digits");
       } else {
         setPhoneError("");
       }
 
-      // ✅ Always keep only numeric characters in state
-      const numericValue = value.replace(/\D/g, "");
       setProfileData((p) => ({ ...p, phone: numericValue }));
     } else {
       setProfileData((p) => ({ ...p, [name]: value }));
     }
   };
 
-  // ✅ Submit Profile
+  // ✅ Submit profile data
   const handleSubmitProfile = async (e) => {
     e.preventDefault();
     setLoading(true);
+
     if (!/^\d{10}$/.test(profileData.phone)) {
       setLoading(false);
-      window.alert(
-        "Please enter a valid 10-digit phone number using digits only."
+      Alert.alert(
+        "Invalid Phone",
+        "Please enter a valid 10-digit phone number."
       );
       return;
     }
+
+    const roleRedirect = {
+      superadmin: "/memberRole/dashboard",
+      admin: "/admin-dashboard",
+      member: "/member/dashboard",
+      staff: "/staff/dashboard",
+    };
 
     try {
       const token = await getToken();
@@ -107,35 +130,20 @@ export default function CompleteProfilePageContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to save profile");
 
-      // ✅ Store role & fullName consistently
-      const fullName = profileData.fullName || "";
-      localStorage.setItem("userFullName", fullName);
+      // ✅ Save role and fullName consistently
+      localStorage.setItem("userFullName", profileData.fullName.trim());
+      localStorage.setItem("userRole", role); // store exact role key ✅
 
-      if (role) {
-        localStorage.setItem("userRole", role.toLowerCase());
-      } else if (profileData.requestAdminAccess) {
-        localStorage.setItem("userRole", "admin");
-      } else {
-        localStorage.setItem("userRole", "staff");
-      }
+      console.log("✅ Profile saved!");
 
-      // ✅ Redirect based on role
-      const redirectMap = {
-        member: "/memberRole/dashboard",
-        admin: "/admin-dashboard",
-        superadmin: "/superadmin",
-        staff: "/staff/dashboard",
-      };
-
-      router.push(redirectMap[role] || "/");
+      router.push(roleRedirect[role] || "/");
     } catch (err) {
-      console.error("Error saving profile:", err);
+      console.error("❌ Profile Sync Error:", err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // ✅ Form Layout (same for all roles)
   return (
     <div className="container py-5">
       <div className="col-md-8 mx-auto">
@@ -241,8 +249,6 @@ export default function CompleteProfilePageContent() {
                 </div>
 
                 {/* Phone */}
-                {/* Phone */}
-                {/* Phone */}
                 <div className="col-md-6">
                   <label className="form-label">Phone Number</label>
                   <div className="input-group">
@@ -308,9 +314,9 @@ export default function CompleteProfilePageContent() {
                   />
                 </div>
 
-                {/* City & State */}
+                {/* City */}
                 <div className="col-md-6">
-                  <label className="form-label">City</label>
+                  <label>City</label>
                   <input
                     name="city"
                     className="form-control"
@@ -320,8 +326,9 @@ export default function CompleteProfilePageContent() {
                   />
                 </div>
 
+                {/* State */}
                 <div className="col-md-6">
-                  <label className="form-label">State</label>
+                  <label>State</label>
                   <input
                     name="state"
                     className="form-control"
@@ -331,9 +338,9 @@ export default function CompleteProfilePageContent() {
                   />
                 </div>
 
-                {/* Country & Zip */}
+                {/* Country */}
                 <div className="col-md-6">
-                  <label className="form-label">Country</label>
+                  <label>Country</label>
                   <input
                     name="country"
                     className="form-control"
@@ -343,8 +350,9 @@ export default function CompleteProfilePageContent() {
                   />
                 </div>
 
+                {/* Zip Code */}
                 <div className="col-md-6">
-                  <label className="form-label">Zip Code</label>
+                  <label>Zip Code</label>
                   <input
                     name="zipcode"
                     className="form-control"
@@ -356,36 +364,31 @@ export default function CompleteProfilePageContent() {
 
                 {/* Additional Info */}
                 <div className="col-12">
-                  <label className="form-label">Additional Info</label>
+                  <label>Additional Info</label>
                   <textarea
                     name="additionalInfo"
                     className="form-control"
+                    rows={3}
                     placeholder="Write something about yourself..."
                     value={profileData.additionalInfo}
                     onChange={handleInputChange}
-                    rows="3"
-                  />
+                  ></textarea>
                 </div>
 
-                {/* ✅ Show only if role is staff */}
+                {/* Staff Request Checkbox */}
                 {role === "staff" && (
-                  <div className="col-12 mt-2">
-                    <div className="form-check">
-                      <input
-                        type="checkbox"
-                        name="requestAdminAccess"
-                        id="requestAdminAccess"
-                        className="form-check-input"
-                        checked={profileData.requestAdminAccess}
-                        onChange={handleInputChange}
-                      />
-                      <label
-                        htmlFor="requestAdminAccess"
-                        className="form-check-label"
-                      >
-                        Request for admin access
-                      </label>
-                    </div>
+                  <div className="col-12 form-check mt-2">
+                    <input
+                      type="checkbox"
+                      name="requestAdminAccess"
+                      id="requestAdminAccess"
+                      className="form-check-input"
+                      checked={profileData.requestAdminAccess}
+                      onChange={handleInputChange}
+                    />
+                    <label htmlFor="requestAdminAccess">
+                      Request for Admin Access
+                    </label>
                   </div>
                 )}
 

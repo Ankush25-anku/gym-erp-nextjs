@@ -5,16 +5,15 @@ import { useRouter } from "next/navigation";
 import { useUser, useAuth } from "@clerk/nextjs";
 
 const StaffProfilePage = () => {
-  const { user, isLoaded: isUserLoaded } = useUser();
+  const { user, isLoaded } = useUser();
   const { getToken } = useAuth();
   const router = useRouter();
-  // At the top of your component
-  const [userRole, setUserRole] = useState(""); // ✅ role state
-  const [userFullName, setUserFullName] = useState("");
-  const [phoneError, setPhoneError] = useState(""); // ✅ full name state
-
+  const [phoneError, setPhoneError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // ✅ userId auto-stored here
   const [profile, setProfile] = useState({
+    userId: "",
     fullName: "",
     email: "",
     phone: "",
@@ -23,34 +22,37 @@ const StaffProfilePage = () => {
     requestAdminAccess: false,
   });
 
+  // ✅ Insert userId automatically in state (and for WebView if used)
   useEffect(() => {
-    if (isUserLoaded && user) {
+    if (isLoaded && user) {
+      const clerkUserId = user.id;
+      localStorage.setItem("userId", clerkUserId); // optional if you need in WebView/RN
       setProfile((prev) => ({
         ...prev,
-        fullName: `${user.firstName || ""} ${user.lastName || ""}`.trim(),
-        email: user.primaryEmailAddress?.emailAddress || "",
+        userId: clerkUserId, // ✅ Auto-store userId
+        fullName: `${user.firstName || ""} ${user.lastName || ""}`.trim(), // prefill name
+        email: user.primaryEmailAddress?.emailAddress || "", // auto-fill email
       }));
+
+      // optional: post to native through WebView
+      window.ReactNativeWebView?.postMessage(
+        JSON.stringify({ userId: clerkUserId })
+      );
     }
-  }, [isUserLoaded, user]);
+  }, [isLoaded, user]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
 
     if (name === "phone") {
-      // ✅ Allow only digits
       const numericValue = value.replace(/\D/g, "");
-
-      // ✅ Validate length
-      if (/[^0-9]/.test(value)) {
-        setPhoneError("Please type only numbers (0–9)");
-      } else if (numericValue.length > 10) {
+      if (numericValue.length > 10) {
         setPhoneError("Phone number cannot exceed 10 digits");
       } else if (numericValue.length < 10 && numericValue.length > 0) {
         setPhoneError("Phone number must be exactly 10 digits");
       } else {
         setPhoneError("");
       }
-
       setProfile((p) => ({ ...p, phone: numericValue }));
     } else {
       setProfile((p) => ({
@@ -60,38 +62,24 @@ const StaffProfilePage = () => {
     }
   };
 
-  const handleKeyDown = (e) => {
-    if (!/[0-9]|Backspace|Tab|ArrowLeft|ArrowRight|Delete/.test(e.key)) {
-      e.preventDefault();
-      setPhoneError("Only numeric input allowed (0–9)");
-    } else {
-      setPhoneError("");
-    }
-  };
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
     if (!/^\d{10}$/.test(profile.phone)) {
-      setLoading(false);
       setPhoneError("Please enter a valid 10-digit phone number.");
+      setLoading(false);
       return;
     }
 
     try {
       const token = await getToken();
-
-      console.log("🧩 Submitting profile data:", profile);
-      console.log(
-        "🔑 Using token:",
-        token ? "✅ Token present" : "❌ No token"
-      );
-
       const apiUrl = `${
         process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
       }/api/employees/register`;
 
-      console.log("🌍 Sending POST to:", apiUrl);
+      console.log("🌐 POST →", apiUrl);
+      console.log("Payload →", profile); // ✅ includes userId automatically
 
       const res = await fetch(apiUrl, {
         method: "POST",
@@ -102,42 +90,29 @@ const StaffProfilePage = () => {
         body: JSON.stringify(profile),
       });
 
-      const contentType = res.headers.get("content-type");
-
-      if (!contentType?.includes("application/json")) {
-        const text = await res.text();
-        console.error("❌ Server did not return JSON. Response was:", text);
-        throw new Error("Server did not return JSON. Check the API route.");
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error("Server did not return JSON. Response was: " + text);
       }
 
-      const data = await res.json();
-      if (!res.ok) {
-        console.error("❌ Backend returned error:", data);
-        throw new Error(data.error || data.message || "Failed to save profile");
-      }
+      if (!res.ok)
+        throw new Error(data.message || data.error || "Failed to save profile");
 
-      console.log("✅ Employee registered successfully:", data);
+      console.log("✅ Saved →", data);
 
-      // Save role and full name in localStorage
-      // ✅ Store full name consistently
-      const fullName = profile.fullName || "";
-      localStorage.setItem("userFullName", fullName);
-      setUserFullName(fullName);
+      // ✅ Save role/fullname locally for immediate use
+      localStorage.setItem("userFullName", profile.fullName);
+      localStorage.setItem(
+        "userRole",
+        profile.requestAdminAccess ? "admin" : "staff"
+      );
 
-      // ✅ Store role consistently
-      const role = profile.requestAdminAccess ? "admin" : "staff";
-      localStorage.setItem("userRole", role);
-      setUserRole(role);
-      // ✅ update state immediately
-
-      // Redirect
-      if (profile.requestAdminAccess) {
-        router.push("/admin-dashboard");
-      } else {
-        router.push("/staff");
-      }
+      router.push(profile.requestAdminAccess ? "/admin-dashboard" : "/staff");
     } catch (err) {
-      console.error("❌ Error submitting staff profile:", err);
+      console.error("❌ Error:", err.message);
       alert(err.message);
     } finally {
       setLoading(false);
@@ -177,6 +152,7 @@ const StaffProfilePage = () => {
                     placeholder="Enter Email"
                     value={profile.email}
                     onChange={handleChange}
+                    readOnly // optional, remove if you want editable
                   />
                 </div>
 
@@ -198,17 +174,14 @@ const StaffProfilePage = () => {
                       placeholder="Enter 10-digit number"
                       value={profile.phone}
                       onChange={handleChange}
-                      onKeyDown={handleKeyDown}
                       maxLength={10}
                       inputMode="numeric"
                       pattern="[0-9]*"
                     />
-                    {phoneError && (
-                      <div className="invalid-feedback d-block">
-                        {phoneError}
-                      </div>
-                    )}
                   </div>
+                  {phoneError && (
+                    <div className="text-danger small mt-1">{phoneError}</div>
+                  )}
                 </div>
 
                 {/* Department */}
@@ -261,7 +234,7 @@ const StaffProfilePage = () => {
                 <div className="col-12">
                   <button
                     type="submit"
-                    className="btn btn-primary-600 w-100"
+                    className="btn btn-primary w-100"
                     disabled={loading}
                   >
                     {loading ? "Saving..." : "Submit"}

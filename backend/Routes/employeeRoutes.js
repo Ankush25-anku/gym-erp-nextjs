@@ -6,22 +6,27 @@ const verifyClerkToken = require("../middleware/verifyClerkToken");
 const router = express.Router();
 
 // Register Employee
+// ✅ Register Employee (Clerk userId stored automatically)
 router.post("/register", verifyClerkToken, async (req, res) => {
   try {
     const {
-      fullName,
-      email,
-      phone,
       department,
       position,
-      profileImage,
+      phone,
+      fullName,
       requestAdminAccess,
-      role, // ✅ new
+      profileImage,
+      role,
     } = req.body;
 
+    const clerkUserId = req.clerkUser.sub;
+    const createdBy = req.clerkUser.sub; // same owner key
+    const userId = req.clerkUser.id; // ✅ Clerk userId from token
+
+    // ✅ Find employee using Clerk userId + owner filter
     let employee = await Employee.findOne({
-      email,
-      createdBy: req.clerkUser.sub,
+      userId,
+      createdBy,
     });
 
     if (employee) {
@@ -30,15 +35,21 @@ router.post("/register", verifyClerkToken, async (req, res) => {
         phone,
         department,
         position,
-        profileImage,
         requestAdminAccess,
+        profileImage,
         role,
       });
       await employee.save();
-      return res.status(200).json({ message: "Employee updated", employee });
+
+      return res.status(200).json({
+        message: "Employee updated",
+        employee,
+      });
     }
 
+    // ✅ Create new employee with auto-inserted userId
     employee = new Employee({
+      userId, // ✅ saved automatically
       fullName,
       email,
       phone,
@@ -47,28 +58,30 @@ router.post("/register", verifyClerkToken, async (req, res) => {
       profileImage,
       requestAdminAccess,
       role,
-      createdBy: req.clerkUser.sub,
+      createdBy,
     });
 
     await employee.save();
-    res
-      .status(201)
-      .json({ message: "Employee registered successfully", employee });
-  } catch (error) {
-    console.error("❌ Error registering employee:", error);
+
+    res.status(201).json({
+      message: "Employee registered successfully",
+      employee,
+    });
+  } catch (err) {
+    console.error("❌ Register error:", err);
     res.status(500).json({ error: "Server error while registering employee" });
   }
 });
 
-// ✅ Get employees for this user
+// ✅ Get employees for logged-in owner
 router.get("/", verifyClerkToken, async (req, res) => {
   try {
     const employees = await Employee.find({
       createdBy: req.clerkUser.sub,
     }).sort({ createdAt: -1 });
+
     res.json(employees);
-  } catch (error) {
-    console.error("❌ Error fetching employees:", error);
+  } catch (err) {
     res.status(500).json({ error: "Server error while fetching employees" });
   }
 });
