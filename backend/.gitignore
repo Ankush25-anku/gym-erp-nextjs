@@ -13,7 +13,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # ❗ Firebase / Secret keys (MUST NOT BE COMMITTED)
-backend/utils/firebase-key.json
+backend/utils/firebase.key.json
 backend/utils/firebase*.json
 firebase-key.json
 *.service-account.json
