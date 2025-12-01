@@ -236,4 +236,41 @@ router.get("/by-gym/:gymCode", verifyClerkToken, async (req, res) => {
   }
 });
 
+// 🔹 GET /members-only/:gymCode - Fetch only approved members (role = member) of that specific gym
+router.get("/members-only/:gymCode", verifyClerkToken, async (req, res) => {
+  try {
+    const gymCode = req.params.gymCode.toUpperCase().trim();
+
+    console.log("📩 Fetching ONLY approved members for gym:", gymCode);
+
+    // 1️⃣ Get approved member approval records for this gym
+    const approvals = await GymApproval.find({
+      gymCode,
+      status: "approved",
+      role: "member", // ✅ ensure only member approvals
+    }).lean();
+
+    if (!approvals.length) {
+      console.warn("⚠️ No approved member records found for gym:", gymCode);
+      return res.json({ success: true, members: [] });
+    }
+
+    // 2️⃣ Extract emails from approval records
+    const emails = approvals.map((u) => u.adminEmail.toLowerCase().trim());
+
+    // 3️⃣ Fetch from ClerkUser but ONLY actual members
+    const members = await ClerkUser.find({
+      email: { $in: emails },
+      role: "member",             // ✅ only members
+    }).select("fullName email role imageUrl fcmTokens");
+
+    console.log(`✅ Found ${members.length} member(s)`);
+    res.json({ success: true, members });
+  } catch (err) {
+    console.error("❌ Member-only fetch error:", err.message);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+
 module.exports = router;

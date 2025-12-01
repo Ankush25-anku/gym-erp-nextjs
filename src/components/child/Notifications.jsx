@@ -4,23 +4,42 @@ import axios from "axios";
 import { useAuth } from "@clerk/nextjs";
 import MasterLayout from "../../masterLayout/MasterLayout";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 export default function NotificationsPage() {
   const { getToken } = useAuth();
 
-  const [users, setUsers] = useState([]);
+  const [gym, setGym] = useState(null);
   const [gymCode, setGymCode] = useState("");
+  const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const [receiverId, setReceiverId] = useState("all"); // 🔥 renamed for clarity
+  const [receiverId, setReceiverId] = useState("all");
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
 
-  // -----------------------------------------------------
-  // 1️⃣ FETCH ADMIN & GYM CODE
-  // -----------------------------------------------------
-  const fetchAdminAndGym = useCallback(async () => {
+  // 1️⃣ Fetch only approved members for this gymCode
+  const fetchMembers = useCallback(async (code, token) => {
+    try {
+      const res = await axios.get(
+        `${API_BASE}/api/clerkusers/members-only/${code}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      console.log("👥 Members:", res.data.members);
+      setMembers(res.data.members || []);
+    } catch (err) {
+      console.error("❌ Failed to fetch members:", err.message);
+      setMembers([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // 2️⃣ Fetch gym and then members
+  const fetchGym = useCallback(async () => {
     try {
       const token = await getToken();
       if (!token) {
@@ -28,66 +47,47 @@ export default function NotificationsPage() {
         return;
       }
 
-      // Fetch profile just to verify token
-      await axios.get(`${API}/api/clerkusers/me`, {
+      const gymRes = await axios.get(`${API_BASE}/api/gym/my-gym`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      // Fetch gymCode
-      const gymRes = await axios.get(`${API}/api/admin/gyms/my-gym`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      const code = gymRes?.data?.gym?.gymCode || gymRes?.data?.gym?.gymCode;
-      if (!code) {
-        alert("⚠️ No gym found! Please join or create a gym first.");
+      if (!gymRes.data.success || !gymRes.data.gym) {
+        alert("⚠️ No gym found, please create/join one first!");
         setLoading(false);
         return;
       }
 
+      const code = gymRes.data.gym.gymCode;
+
+      setGym(gymRes.data.gym);
       setGymCode(code);
+
+      // ✅ fetch only members of that gym who are approved
+      const membersRes = await axios.get(
+        `${API_BASE}/api/clerkusers/by-gym/${code}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      // ✅ filter only Clerk role member
+      const onlyMembers = membersRes.data.filter((u) => u.role === "member");
+      setMembers(onlyMembers);
     } catch (err) {
-      console.error("❌ Error fetching admin or gym:", err.message);
+      console.error("❌ Gym fetch failed:", err.message);
+      alert("❌ Failed to fetch gym");
+      setMembers([]);
+      setLoading(false);
+    } finally {
+      setLoading(false);
     }
   }, [getToken]);
 
-  // -----------------------------------------------------
-  // 2️⃣ FETCH ALL USERS OF THIS GYM
-  // -----------------------------------------------------
-  const fetchGymUsers = useCallback(
-    async (code) => {
-      try {
-        const token = await getToken();
-        const res = await axios.get(`${API}/api/clerkusers/by-gym/${code}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        setUsers(res.data || []);
-      } catch (err) {
-        console.error("❌ Error fetching users by gym:", err.message);
-        setUsers([]);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [getToken]
-  );
-
-  // Load admin + gym
   useEffect(() => {
-    fetchAdminAndGym();
-  }, [fetchAdminAndGym]);
+    fetchGym();
+  }, [fetchGym]);
 
-  // Load users when gymCode arrives
-  useEffect(() => {
-    if (gymCode) {
-      fetchGymUsers(gymCode);
-    }
-  }, [gymCode, fetchGymUsers]);
-
-  // -----------------------------------------------------
-  // 3️⃣ SEND NOTIFICATION
-  // -----------------------------------------------------
+  // 3️⃣ Send notification
   const sendNotification = async () => {
     if (!title.trim() || !message.trim()) {
       alert("⚠️ Title & message are required!");
@@ -98,44 +98,56 @@ export default function NotificationsPage() {
       const token = await getToken();
       if (!token) return;
 
-      await axios.post(
-        `${API}/api/notifications/send`,
-        { userId: receiverId, title, message, gymCode }, // 🔥 added gymCode
-        { headers: { Authorization: `Bearer ${token}` } }
+      const payload = {
+        userId: receiverId,
+        title,
+        message,
+        gymCode: gym?.gymCode,
+        data: { screen: "WorkoutPlan", memberId: "12345" },
+      };
+
+      const sendRes = await axios.post(
+        `${API_BASE}/api/notifications/send`,
+        payload,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
       );
 
-      alert("✅ Notification sent successfully!");
-
-      // Reset form ✅
-      setTitle("");
-      setMessage("");
-      setReceiverId("all");
+      if (sendRes.data.success) {
+        alert(
+          `✅ Notification sent to ${sendRes.data.sentTokensCount} device(s)!`
+        );
+        setTitle("");
+        setMessage("");
+        setReceiverId("all");
+      } else {
+        alert("⚠️ " + sendRes.data.message);
+      }
     } catch (err) {
-      console.error("❌ Notification send failed:", err.message);
+      console.error("❌ Notification send error:", err.message);
       alert("❌ Failed to send notification");
     }
   };
 
-  // -----------------------------------------------------
-  // UI RENDER
-  // -----------------------------------------------------
   return (
     <MasterLayout>
       <div className="container py-4">
-        <h2 className="fw-bold mb-4">Send Notifications</h2>
+        <h2 className="text-center fw-bold mb-4">Send Notifications</h2>
+
+        {gym && (
+          <div className="alert alert-info text-center">
+            <strong>Gym:</strong> {gym.gymName} ({gym.gymCode})
+          </div>
+        )}
 
         {loading ? (
-          <p className="text-center">Loading gym users...</p>
+          <p className="text-center">Loading members...</p>
         ) : (
           <div
             className="card shadow-sm p-4"
-            style={{
-              maxWidth: "600px",
-              margin: "0 auto",
-              borderRadius: "12px",
-            }}
+            style={{ maxWidth: 600, margin: "0 auto", borderRadius: 12 }}
           >
-            {/* SELECT RECEIVER */}
             <div className="mb-3">
               <label className="form-label fw-semibold">Select Member</label>
               <select
@@ -143,35 +155,25 @@ export default function NotificationsPage() {
                 value={receiverId}
                 onChange={(e) => setReceiverId(e.target.value)}
               >
-                <option value="all">
-                  Send to ALL Members of Gym ({gymCode || "—"})
-                </option>
-
-                {users.length > 0 ? (
-                  users.map((u) => (
-                    <option key={u._id} value={u._id}>
-                      {u.fullName || "No Name"} ({u.email || "No Email"})
-                    </option>
-                  ))
-                ) : (
-                  <option disabled>No users registered in this gym</option>
-                )}
+                <option value="all">🔔 Send to ALL Approved Members</option>
+                {members.map((m) => (
+                  <option key={m._id} value={m._id}>
+                    {m.fullName} ({m.email})
+                  </option>
+                ))}
               </select>
             </div>
 
-            {/* TITLE */}
             <div className="mb-3">
               <label className="form-label fw-semibold">Title</label>
               <input
-                type="text"
                 className="form-control"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Enter notification title"
+                placeholder="Enter title"
               />
             </div>
 
-            {/* MESSAGE */}
             <div className="mb-3">
               <label className="form-label fw-semibold">Message</label>
               <textarea
@@ -179,16 +181,15 @@ export default function NotificationsPage() {
                 rows="3"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                placeholder="Enter notification message"
-              ></textarea>
+                placeholder="Enter message"
+              />
             </div>
 
-            {/* SEND */}
             <button
               className="btn btn-primary w-100"
               onClick={sendNotification}
             >
-              Send Notification
+              🚀 Send Notification
             </button>
           </div>
         )}

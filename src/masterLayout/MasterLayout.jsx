@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { FaChevronDown, FaChevronUp } from "react-icons/fa";
+import NotificationBell from "../components/NotificationBell";
 
 import { Icon } from "@iconify/react/dist/iconify.js";
 import { usePathname } from "next/navigation";
@@ -10,7 +11,7 @@ import { useUser, useAuth } from "@clerk/nextjs";
 import axios from "axios"; // ✅ make sure axios is imported
 
 const API_BASE = "http://localhost:5000";
-const   MasterLayout = ({ children }) => {
+const MasterLayout = ({ children }) => {
   const pathname = usePathname();
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [sidebarActive, setSidebarActive] = useState(false);
@@ -2459,6 +2460,8 @@ const   MasterLayout = ({ children }) => {
             <div className="col-auto">
               <div className="d-flex flex-wrap align-items-center gap-3">
                 {/* ThemeToggleButton */}
+
+                <NotificationBell />
                 <ThemeToggleButton />
                 <div className="dropdown d-none d-sm-inline-block">
                   <button

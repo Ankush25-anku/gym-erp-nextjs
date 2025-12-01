@@ -1,23 +1,29 @@
-const admin = require("firebase-admin");
-const serviceAccount = require("./firebase-key.json");
-const axios = require("axios");
+require("dotenv").config({ path: "../.env" });
 
-// --------------------------------------------------------
-// 1. INITIALIZE FIREBASE ADMIN SDK (Run once)
-// --------------------------------------------------------
+const admin = require("firebase-admin");
+
+// 1. Initialize Firebase Admin once
 if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
+  try {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+    console.log("🟢 Firebase Admin Initialized");
+  } catch (err) {
+    console.error("❌ Firebase Init Error:", err.message);
+    process.exit(1);
+  }
 }
 
+// 2. Function to send notification via Firebase Admin
 async function sendFCMNotificationAdmin(tokenObject, title, body, data = {}) {
   const { token, platform } = tokenObject;
 
   const message = {
     notification: { title, body },
-    data: data,
-    token: token,
+    data,
+    token,
   };
 
   if (platform === "ios") {
@@ -28,96 +34,46 @@ async function sendFCMNotificationAdmin(tokenObject, title, body, data = {}) {
   } else if (platform === "android") {
     message.android = {
       priority: "high",
-      notification: {
-        channelId: "default_channel_id",
-        sound: "default",
-      },
+      notification: { channelId: "default_channel_id", sound: "default" },
     };
   }
 
   try {
     const response = await admin.messaging().send(message);
-    console.log(`✅ FCM Success (${platform}):`, response);
-    return { success: true, response, token };
-  } catch (error) {
-    console.log(`❌ FCM Error (${platform}):`, error.message);
-    return { success: false, error: error.message, token };
-  }
-}
-
-// --------------------------------------------------------
-// 2. FETCH USERS + THEIR FCM TOKENS FROM BACKEND DB
-// --------------------------------------------------------
-async function fetchUsersFCMTokens() {
-  try {
-    const API_BASE = process.env.NEXT_PUBLIC_API_URL; // ✅ use env
-    const res = await axios.get(`${API_BASE}/api/users`);
-    const users = res.data?.users || [];
-
-    const allTokenObjects = [];
-
-    users.forEach((u) => {
-      if (Array.isArray(u.fcmTokens)) {
-        u.fcmTokens.forEach((t) => {
-          allTokenObjects.push({
-            token: t.token,
-            platform: t.platform || "android",
-            createdAt: t.createdAt,
-          });
-        });
-      }
-    });
-
-    console.log("📌 Total devices found in DB:", allTokenObjects.length);
-    return allTokenObjects;
+    console.log("✅ FCM Sent:", response);
+    return { success: true, response };
   } catch (err) {
-    console.error("🔥 Token Fetch Failed:", err.message);
-    return [];
+    console.error("❌ FCM Error:", err.message);
+    return { success: false, error: err.message };
   }
 }
 
-// --------------------------------------------------------
-// 3. TEST SENDING NOTIFICATION TO ALL USER DEVICES
-// --------------------------------------------------------
-async function sendTestMessageToMultipleDevicesAdmin() {
-  const tokenObjects = await fetchUsersFCMTokens();
+// 3. 🔥 MANUAL TEST CALL — You can copy token and test real notification on device
+async function runManualTest() {
+  const phoneToken =
+    "fca2nm0GQnexV_2uEzVVp8:APA91bEkqmOf0FaxeJv_0XXom4PfUllZ_ji4GCdnKQejmjP43vGU8ZMCP0NclaNDshqNnTzYTPqrM4408llFMRYJFn1BWYSIwlqfnPGki1RGtnLBG7TEovM";
+  // 👈 Paste your real device token here
 
-  if (!tokenObjects.length) {
-    console.log("⚠ No FCM devices stored in DB!");
+  if (!phoneToken || phoneToken.includes("PASTE")) {
+    console.error("⚠️ Please paste a valid phone FCM token in runManualTest()");
     return;
   }
 
-  const notificationTitle = "🔥 FCM Test Message";
-  const notificationBody = "This was sent using Firebase Admin SDK ✅";
-  const customData = { screen: "DashboardTest" };
-
-  const sendPromises = tokenObjects.map((tokenObj) =>
-    sendFCMNotificationAdmin(
-      tokenObj,
-      notificationTitle,
-      notificationBody,
-      customData
-    )
+  await sendFCMNotificationAdmin(
+    { token: phoneToken, platform: "android" },
+    "Workout Updated",
+    "Your trainer assigned a new workout",
+    { screen: "WorkoutPlan", memberId: "12345" }
   );
-
-  console.log("--- 🚀 Sending notification to all devices ---");
-  const results = await Promise.all(sendPromises);
-  console.log("--- ✅ All sends completed ---");
-
-  // --------------------------------------------------------
-  // 4. REMOVE INVALID TOKENS FROM DB IF FAILED
-  // --------------------------------------------------------
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL;
-
-  for (const r of results) {
-    if (!r.success && r.error?.includes("invalid-registration-token")) {
-      console.log("🗑 Removing invalid token:", r.token);
-
-      await axios.post(`${API_BASE}/api/users/remove-fcm-token`, {
-        fcmToken: r.token,
-      });
-    }
-  }
 }
 
-sendTestMessageToMultipleDevicesAdmin().catch(console.error);
+// 4. Export function if you want to call this from routes later
+module.exports = {
+  sendFCMNotificationAdmin,
+  runManualTest,
+};
+
+// 5. Run Manual Test when executing this file directly
+if (require.main === module) {
+  runManualTest().catch(console.error);
+}
