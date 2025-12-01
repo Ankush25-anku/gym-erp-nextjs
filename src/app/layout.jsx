@@ -44,7 +44,7 @@ export default function RootLayout({ children }) {
             />
           </head>
           <body className="antialiased">
-            <header className="flex justify-end items-center p-4 gap-4 h-16 border-b">
+            {/* <header className="flex justify-end items-center p-4 gap-4 h-16 border-b">
               <SignedOut>
                 <SignInButton mode="modal">
                   <button className="bg-gray-800 text-white rounded-full px-4 py-2 text-sm">
@@ -64,7 +64,7 @@ export default function RootLayout({ children }) {
                   afterProfileUrl="/" // optional, can point to "/" or role-specific page
                 />
               </SignedIn>
-            </header>
+            </header> */}
 
             {/* ✅ Children of both Clerk + User contexts */}
             <main>{children}</main>
