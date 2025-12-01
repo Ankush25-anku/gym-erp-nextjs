@@ -307,7 +307,7 @@ function mountRoutes() {
   app.use("/api/gyms", require("./Routes/gymRoutes"));
   app.use("/api/user-management", require("./Routes/userRoutes"));
   app.use("/api/auth", require("./Routes/auth"));
-  app.use("/api/notifications", require("./Routes/notificationRoutes"));
+
   app.use("/api/payments", require("./Routes/memberPayments"));
   app.use("/api/roles-permissions", require("./Routes/rolesPermissionRoutes"));
   app.use("/api/superadmin/users", require("./Routes/superAdminUserRoutes"));
