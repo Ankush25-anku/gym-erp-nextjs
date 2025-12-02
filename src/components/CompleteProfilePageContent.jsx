@@ -32,6 +32,7 @@ export default function CompleteProfilePageContent() {
     additionalInfo: "",
     requestAdminAccess: false, // ✅ Added field for staff
   });
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
   // ✅ Auto-fill user data from Clerk
   useEffect(() => {
@@ -155,14 +156,13 @@ export default function CompleteProfilePageContent() {
 
           console.log("🟣 Mongo _id:", mongo_id);
 
-          // 📩 Send to React Native WebView
           window.ReactNativeWebView?.postMessage(
             JSON.stringify({ userMongoId: mongo_id })
           );
         }
       } catch (err) {
         console.error(
-          "⚠ Image fetch failed:",
+          "⚠ API fetch failed:",
           err.response?.status,
           err.response?.data
         );

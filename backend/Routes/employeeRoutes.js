@@ -19,15 +19,11 @@ router.post("/register", verifyClerkToken, async (req, res) => {
       role,
     } = req.body;
 
-    const clerkUserId = req.clerkUser.sub;
-    const createdBy = req.clerkUser.sub; // same owner key
-    const userId = req.clerkUser.id; // ✅ Clerk userId from token
+    const userId = req.clerkUser.sub;
+    const createdBy = req.clerkUser.sub;
+    const email = req.clerkUser.email; // ✅ FIX HERE
 
-    // ✅ Find employee using Clerk userId + owner filter
-    let employee = await Employee.findOne({
-      userId,
-      createdBy,
-    });
+    let employee = await Employee.findOne({ userId, createdBy });
 
     if (employee) {
       employee.set({
@@ -39,19 +35,19 @@ router.post("/register", verifyClerkToken, async (req, res) => {
         profileImage,
         role,
       });
-      await employee.save();
 
+      await employee.save();
       return res.status(200).json({
         message: "Employee updated",
         employee,
       });
     }
 
-    // ✅ Create new employee with auto-inserted userId
+    // create new employee
     employee = new Employee({
-      userId, // ✅ saved automatically
+      userId,
       fullName,
-      email,
+      email, // now defined
       phone,
       department,
       position,
@@ -63,7 +59,7 @@ router.post("/register", verifyClerkToken, async (req, res) => {
 
     await employee.save();
 
-    res.status(201).json({
+    return res.status(201).json({
       message: "Employee registered successfully",
       employee,
     });

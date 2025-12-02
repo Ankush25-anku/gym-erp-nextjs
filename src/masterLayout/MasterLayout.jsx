@@ -76,6 +76,10 @@ const MasterLayout = ({ children }) => {
       (async () => {
         try {
           const token = await getToken();
+          if (!joinedGymCode) {
+            console.log("⛔ No gym joined yet → skipping API call.");
+            return;
+          }
           const res = await axios.get(`${API_BASE}/api/supergyms/joined`, {
             headers: { Authorization: `Bearer ${token}` },
           });
@@ -178,7 +182,7 @@ const MasterLayout = ({ children }) => {
       setShowJoinGym(false);
     } else {
       setJoinedGymCode(""); // Fresh join
-      setShowJoinGym(true); // Show Join Gym button
+      setShowJoinGym(false); // Show Join Gym button
       setEnteredCode("");
       setIsValidCode(false);
       setValidationMessage("");
@@ -339,7 +343,7 @@ const MasterLayout = ({ children }) => {
     } else {
       // ✅ No gym joined yet → reset states
       setJoinedGymCode("");
-      setShowJoinGym(true);
+      setShowJoinGym(false);
       setEnteredCode("");
       setIsValidCode(false);
       setValidationMessage("");
