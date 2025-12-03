@@ -10,8 +10,8 @@ import ThemeToggleButton from "../helper/ThemeToggleButton";
 import { useUser, useAuth } from "@clerk/nextjs";
 import axios from "axios"; // ✅ make sure axios is imported
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://192.168.31.76:5000"; // your LAN IP
-// const API_BASE = "http://localhost:5000";
+// const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://192.168.31.76:5000"; // your LAN IP
+const API_BASE = "http://localhost:5000";
 const MasterLayout = ({ children }) => {
   const pathname = usePathname();
   const [expenseOpen, setExpenseOpen] = useState(false);
