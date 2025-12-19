@@ -16,6 +16,7 @@ export default function AfterSignUp() {
     Owner: { key: "superadmin", path: "/complete-profile?role=superadmin" },
     Member: { key: "member", path: "/member-profile" },
     Staff: { key: "admin", path: "/staff-profile" },
+    Trainer: { key: "trainer", path: "/trainer-profile" },
   };
 
   // ✅ Step 1: Check if user already has a role set
@@ -36,6 +37,7 @@ export default function AfterSignUp() {
       superadmin: "/superadmin",
       admin: "/admin/dashboard",
       member: "/member/dashboard",
+      trainer: "/trainer",
     };
     router.push(paths[role] || "/");
   };
@@ -101,8 +103,9 @@ export default function AfterSignUp() {
         <p style={{ marginBottom: "1.5rem", color: "#555" }}>
           Please select your role to continue:
         </p>
+
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          {["Owner", "Staff", "Member"].map((roleLabel) => (
+          {["Owner", "Staff", "Member", "Trainer"].map((roleLabel) => (
             <button
               key={roleLabel}
               onClick={() => handleRoleSelect(roleLabel)}
@@ -115,7 +118,9 @@ export default function AfterSignUp() {
                     ? "#f59e0b"
                     : roleLabel === "Staff"
                     ? "#3b82f6"
-                    : "#10b981",
+                    : roleLabel === "Member"
+                    ? "#10b981"
+                    : "#8b5cf6", // 💜 Trainer button
                 color: "white",
                 fontSize: "1rem",
                 fontWeight: "bold",

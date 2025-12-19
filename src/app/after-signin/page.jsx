@@ -11,20 +11,26 @@ export default function AfterSignInPage() {
   const { user, isLoaded: isUserLoaded } = useUser();
   const { getToken, isLoaded: isAuthLoaded } = useAuth();
   const router = useRouter();
+
   const [error, setError] = useState(null);
   const [showRoleModal, setShowRoleModal] = useState(false);
 
+  // ROLE MAP
   const roleMap = {
-    Owner: { key: "superadmin", path: "/superadmin" },
-    Member: { key: "member", path: "/member" },
-    Staff: { key: "staff", path: "/staff" },
-    Trainer: { key: "trainer", path: "/trainer" },
-    Admin: { key: "admin", path: "/admin-dashboard" },
+    superadmin: "/superadmin",
+    admin: "/admin-dashboard",
+    staff: "/staff",
+    member: "/member",
+    trainer: "/trainer",
   };
 
-  const capitalize = (str) =>
-    str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : "";
+  // Convert any input role
+  const normalizeRole = (role) =>
+    role ? role.toString().trim().toLowerCase() : null;
 
+  // ----------------------
+  //     MAIN LOGIC
+  // ----------------------
   useEffect(() => {
     const init = async () => {
       if (!isUserLoaded || !isAuthLoaded) return;
@@ -34,119 +40,104 @@ export default function AfterSignInPage() {
         return;
       }
 
-      const email = user.primaryEmailAddress?.emailAddress;
       const token = await getToken();
-
-      if (user.id) {
-        localStorage.setItem("userId", user.id); // ✅ Store Clerk userId
-        console.log("✅ Stored Clerk userId:", user.id);
-      }
-
-      if (!email || !token) {
-        setError("Missing email or token");
-        console.error("❌ Clerk Email or Token missing");
+      if (!token) {
+        setError("Missing token");
         return;
       }
 
       try {
-        const res = await axios.get(`${API_BASE}/api/clerkusers/get-role`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        //---------------------------------
+        // 1️⃣ GET BACKEND ROLE
+        //---------------------------------
+        let backendRole = null;
 
-        const backendRole = res.data.role;
-        console.log("🔥 Backend Role received:", backendRole);
+        try {
+          const res = await axios.get(`${API_BASE}/api/clerkusers/get-role`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
 
-        if (backendRole) {
-          const roleLower = backendRole.toLowerCase();
-          localStorage.setItem("userRole", roleLower);
+          backendRole = normalizeRole(res.data.role);
+          console.log("🔥 Backend Role:", backendRole);
+        } catch (e) {
+          console.log("Backend role fetch failed (not fatal)");
+        }
 
-          // Auto Register Employee if Staff
-          if (roleLower === "staff") {
-            try {
-              const employeeData = {
-                fullName: `${user.firstName || ""} ${
-                  user.lastName || ""
-                }`.trim(),
-                email,
-                phone: user?.phoneNumbers?.[0]?.phoneNumber || "",
-                department: "General",
-                position: "Staff",
-                profileImage: user.imageUrl || "",
-                requestAdminAccess: false,
-                role: "staff",
-              };
+        //---------------------------------
+        // 2️⃣ GET CLERK STORED ROLE
+        //---------------------------------
+        const clerkRole = normalizeRole(user.publicMetadata?.role);
+        console.log("⚡ Clerk Metadata Role:", clerkRole);
 
-              await axios.post(
-                `${API_BASE}/api/employees/register`,
-                employeeData,
-                {
-                  headers: { Authorization: `Bearer ${token}` },
-                }
-              );
+        //---------------------------------
+        // 3️⃣ DECIDE FINAL ROLE
+        //---------------------------------
+        const finalRole = backendRole || clerkRole || null;
+        console.log("🎯 Final Decided Role:", finalRole);
 
-              console.log("✅ Staff employee auto-registered");
-            } catch (err) {
-              console.warn("⚠️ Employee auto-register failed:", err.message);
-            }
-          }
+        //---------------------------------
+        // 4️⃣ IF ROLE EXISTS → REDIRECT
+        //---------------------------------
+        if (finalRole) {
+          localStorage.setItem("userRole", finalRole);
 
-          // Redirect based on role
-          const mapped = roleMap[capitalize(backendRole)];
-          router.replace(mapped?.path || "/");
+          const redirectPath = roleMap[finalRole] || "/";
+          console.log("➡ Redirecting to:", redirectPath);
+
+          router.replace(redirectPath);
           return;
         }
 
-        // Fallback → Clerk publicMetadata role
-        const clerkRole = user.publicMetadata?.role;
-        if (clerkRole) {
-          localStorage.setItem("userRole", clerkRole.toLowerCase());
-          const mapped = roleMap[capitalize(clerkRole)];
-          router.replace(mapped?.path || "/");
-          return;
-        }
-
-        // No Role → Show Modal
+        //---------------------------------
+        // 5️⃣ NO ROLE ANYWHERE → SHOW ROLE SELECTOR
+        //---------------------------------
         setShowRoleModal(true);
       } catch (err) {
-        console.error("❌ Failed to fetch role from backend:", err.message);
-        setError("Failed to get role from backend");
+        console.error("❌ Error:", err);
+        setError("Unexpected error occurred.");
       }
     };
 
     init();
   }, [isUserLoaded, isAuthLoaded, user, router]);
+
+  // ----------------------
+  //   ROLE SELECT HANDLER
+  // ----------------------
   const handleRoleSelect = async (roleLabel) => {
-    const roleData = roleMap[roleLabel];
-    if (!roleData) return;
+    const role = roleLabel.toLowerCase();
 
     try {
-      const token = await getToken(); // 🔐 Get Clerk JWT
+      const token = await getToken();
       if (!token) {
-        alert("Unauthorized: No token found");
+        alert("Unauthorized");
         return;
       }
 
-      // 🚀 ✅ FIX — Save role in backend correctly
+      console.log("💾 Saving role:", role);
+
       await axios.post(
-        `${API}/api/clerkusers/set-role`,
-        { role: roleData.key },
-        { headers: { Authorization: `Bearer ${token}` } }
+        `${API_BASE}/api/clerkusers/set-role`,
+        { role },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
       );
 
-      localStorage.setItem("userRole", roleData.key);
+      localStorage.setItem("userRole", role);
+
       setShowRoleModal(false);
-      router.push(roleData.path);
+
+      router.push(roleMap[role] || "/");
     } catch (err) {
-      console.error(
-        "❌ Failed to set role:",
-        err.response?.data || err.message
-      );
+      console.error("❌ Failed to set role:", err);
       alert("Failed to save role in backend");
     }
   };
 
-  if (!isUserLoaded || !isAuthLoaded) return <p>Loading...</p>;
-
+  // ----------------------
+  //       UI RENDER
+  // ----------------------
   return (
     <>
       <SignedIn>
@@ -171,15 +162,11 @@ export default function AfterSignInPage() {
                 padding: "2rem",
                 width: "420px",
                 textAlign: "center",
-                boxShadow: "0 12px 32px rgba(0,0,0,0.25)",
               }}
             >
-              <h2 style={{ marginBottom: "0.5rem" }}>
-                Welcome, {user?.firstName || "New User"} 🎉
-              </h2>
-              <p style={{ marginBottom: "1.5rem", color: "#555" }}>
-                Please select your role to continue:
-              </p>
+              <h2>Welcome, {user?.firstName || "New User"} 🎉</h2>
+              <p>Select your role to continue:</p>
+
               <div
                 style={{
                   display: "flex",
@@ -187,37 +174,43 @@ export default function AfterSignInPage() {
                   gap: "1rem",
                 }}
               >
-                {["Owner", "Staff", "Member", "Trainer"].map((roleLabel) => (
-                  <button
-                    key={roleLabel}
-                    onClick={() => handleRoleSelect(roleLabel)}
-                    style={{
-                      padding: "0.9rem 1rem",
-                      borderRadius: "10px",
-                      border: "none",
-                      background:
-                        roleLabel === "Owner"
-                          ? "#f59e0b"
-                          : roleLabel === "Staff"
-                          ? "#3b82f6"
-                          : roleLabel === "Member"
-                          ? "#10b981"
-                          : "#8b5cf6",
-                      color: "white",
-                      fontSize: "1rem",
-                      fontWeight: "bold",
-                      cursor: "pointer",
-                    }}
-                  >
-                    {roleLabel}
-                  </button>
-                ))}
+                {["superadmin", "admin", "staff", "member", "trainer"].map(
+                  (role) => (
+                    <button
+                      key={role}
+                      onClick={() => handleRoleSelect(role)}
+                      style={{
+                        padding: "0.9rem 1rem",
+                        borderRadius: "10px",
+                        background:
+                          role === "superadmin"
+                            ? "#f59e0b"
+                            : role === "admin"
+                            ? "#ef4444"
+                            : role === "staff"
+                            ? "#3b82f6"
+                            : role === "member"
+                            ? "#10b981"
+                            : "#8b5cf6",
+                        color: "white",
+                        fontWeight: "bold",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {role.toUpperCase()}
+                    </button>
+                  )
+                )}
               </div>
             </div>
           </div>
         )}
 
-        {!showRoleModal && !error && <p>Redirecting based on your role...</p>}
+        {!showRoleModal && !error && (
+          <p style={{ textAlign: "center", marginTop: "20px" }}>
+            Redirecting based on your role...
+          </p>
+        )}
       </SignedIn>
 
       <SignedOut>

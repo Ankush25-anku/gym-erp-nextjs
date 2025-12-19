@@ -34,27 +34,32 @@ const verifyClerkToken = async (req, res, next) => {
     const employee = await Employee.findOne({ email });
     console.log("🔹 Employee record found:", employee);
 
-    // 2️⃣ Check ClerkUser (for superadmins & completed profiles)
+    // 2️⃣ Check ClerkUser (superadmin, trainer, completed profiles)
     let dbUser = await ClerkUser.findOne({ sub: user.id });
     console.log("🔹 ClerkUser record found:", dbUser);
 
-    // Determine role priority
+    // Extract Clerk metadata role
     const metaRole = user.publicMetadata?.role?.toLowerCase() || "";
     let finalRole = "member";
 
-    if (employee) {
-      finalRole = employee.requestAdminAccess ? "admin" : "staff";
-    } else if (metaRole === "superadmin") {
+    // ⭐⭐⭐ ROLE PRIORITY ORDER (Trainer added) ⭐⭐⭐
+    if (metaRole === "superadmin") {
       finalRole = "superadmin";
     } else if (metaRole === "admin" || metaRole === "staff") {
       finalRole = metaRole;
+    } else if (metaRole === "trainer") {
+      finalRole = "trainer"; // ⬅️ NEW
+    } else if (employee) {
+      finalRole = employee.requestAdminAccess ? "admin" : "staff";
+    } else if (dbUser?.role === "trainer") {
+      finalRole = "trainer"; // ⬅️ NEW
     } else if (dbUser?.role) {
       finalRole = dbUser.role;
     }
 
     console.log("🔹 Final role determined:", finalRole);
 
-    // Determine full name priority
+    // Name Priority
     const fullNameFromEmployee = employee?.fullName?.trim() || "";
     const fullNameFromDb = dbUser?.fullName?.trim() || "";
     const fullNameFromClerk =
@@ -67,7 +72,7 @@ const verifyClerkToken = async (req, res, next) => {
 
     console.log("🧠 Final full name determined:", finalFullName);
 
-    // Sync ClerkUser data
+    // Sync ClerkUser
     if (!dbUser) {
       dbUser = await ClerkUser.create({
         sub: user.id,

@@ -543,6 +543,63 @@ const MasterLayout = ({ children }) => {
     }
   };
 
+  // ⭐ TRAINER → ADMIN approval request
+  const handleSendTrainerApprovalRequest = async (gymCode) => {
+    try {
+      console.log("📨 Sending Trainer → Admin approval for gymCode:", gymCode);
+
+      const token = await getToken();
+      if (!token) {
+        alert("⚠️ Authentication failed. Please login again.");
+        return false;
+      }
+
+      // Get full name from localStorage OR Clerk user
+      const storedFullName = localStorage.getItem("userFullName");
+      const fullName =
+        storedFullName?.trim() ||
+        `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
+        "Unknown Trainer";
+
+      const requesterEmail = user?.primaryEmailAddress?.emailAddress;
+
+      const payload = {
+        gymCode,
+        fullName,
+        requesterEmail,
+        adminEmail: "", // Admin will detect gym's admin automatically
+        clerkRole: "trainer",
+        role: "trainer",
+      };
+
+      console.log("📦 Trainer → Admin Payload:", payload);
+
+      const res = await axios.post(`${API_BASE}/api/gym/request`, payload, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      console.log("📩 Response from /api/gym/request:", res.data);
+
+      if (res.data?.success) {
+        console.log("✅ Trainer approval request sent successfully!");
+        setApprovalStatus("pending");
+        return true;
+      } else {
+        alert(
+          res.data?.message || "❌ Failed to send trainer approval request."
+        );
+        return false;
+      }
+    } catch (err) {
+      console.error("❌ Error sending Trainer approval:", err);
+      alert(
+        err.response?.data?.message ||
+          "⚠️ Something went wrong while sending trainer approval."
+      );
+      return false;
+    }
+  };
+
   const handleSubmitJoin = async () => {
     if (!enteredCode.trim()) return;
 
@@ -619,6 +676,8 @@ const MasterLayout = ({ children }) => {
           approvalSent = await handleSendStaffApprovalRequest(normalizedCode);
         } else if (role?.toLowerCase() === "member") {
           approvalSent = await handleSendMemberApprovalRequest(normalizedCode);
+        } else if (role?.toLowerCase() === "trainer") {
+          approvalSent = await handleSendTrainerApprovalRequest(normalizedCode);
         }
 
         if (approvalSent) {
@@ -684,7 +743,9 @@ const MasterLayout = ({ children }) => {
       } else if (role === "staff") {
         endpoint = `${API_BASE}/api/gym/staff-approval-status/${gymCode}`; // staff → admin
       } else if (role === "member") {
-        endpoint = `${API_BASE}/api/gym/member-approval-status/${gymCode}`; // 👈 NEW route for member
+        endpoint = `${API_BASE}/api/gym/member-approval-status/${gymCode}`;
+      } else if (role === "trainer") {
+        endpoint = `${API_BASE}/api/gym/trainer-approval-status/${gymCode}`; // 👈 NEW route for member
       } else {
         console.warn("⚠️ Unknown role — cannot fetch approval status");
         return;
@@ -812,6 +873,7 @@ const MasterLayout = ({ children }) => {
     if (userRole === "staff") return "Staff";
     if (userRole === "admin") return "Admin";
     if (userRole === "member") return "Member";
+    if (userRole === "trainer") return "Trainer";
     return "User";
   };
 
@@ -844,7 +906,11 @@ const MasterLayout = ({ children }) => {
       if (user?.firstName) return user.firstName;
       return "Member";
     }
-
+    if (userRole === "trainer") {
+      if (profile?.fullName) return profile.fullName;
+      if (user?.firstName) return user.firstName;
+      return "Trainer";
+    }
     return profile?.fullName || user?.firstName || "User";
   };
 
@@ -1082,6 +1148,21 @@ const MasterLayout = ({ children }) => {
                           className="menu-icon"
                         />
                         <span>Member Requests</span>
+                      </Link>
+                    </li>
+
+                    <li>
+                      <Link
+                        href="/trainer-requests"
+                        className={
+                          pathname === "/trainer-requests" ? "active-page" : ""
+                        }
+                      >
+                        <Icon
+                          icon="mdi:account-tie-outline"
+                          className="menu-icon"
+                        />
+                        <span>trainer Requests</span>
                       </Link>
                     </li>
 
@@ -1477,67 +1558,205 @@ const MasterLayout = ({ children }) => {
             )}
 
             {/* Trainer Sidebar */}
-            {typeof window !== "undefined" &&
-              localStorage.getItem("userRole") === "trainer" && (
-                <>
-                  <li>
-                    <Link
-                      href="/trainer"
-                      className={pathname === "/trainer" ? "active-page" : ""}
-                    >
-                      <Icon
-                        icon="solar:home-smile-angle-outline"
-                        className="menu-icon"
-                      />
-                      <span>Dashboard</span>
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      href="/trainer/attendance"
-                      className={
-                        pathname === "/trainer/attendance" ? "active-page" : ""
-                      }
-                    >
-                      <Icon icon="bi:calendar-check" className="menu-icon" />
-                      <span>Attendance</span>
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      href="/trainer/members"
-                      className={
-                        pathname === "/trainer/members" ? "active-page" : ""
-                      }
-                    >
-                      <Icon icon="bi:people-fill" className="menu-icon" />
-                      <span>My Members</span>
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      href="/trainer/schedule"
-                      className={
-                        pathname === "/trainer/schedule" ? "active-page" : ""
-                      }
-                    >
-                      <Icon icon="bi:calendar2-week" className="menu-icon" />
-                      <span>Schedule</span>
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      href="/trainer/workoutplan"
-                      className={
-                        pathname === "/trainer/workoutplan" ? "active-page" : ""
-                      }
-                    >
-                      <Icon icon="mdi:weight-lifter" className="menu-icon" />
-                      <span>Workout Plan</span>
-                    </Link>
-                  </li>
-                </>
-              )}
+            {userRole === "trainer" && (
+              <>
+                {/* ================= TRAINER SIDEBAR ================= */}
+                <aside
+                  className={`sidebar ${sidebarActive ? "active" : ""}`}
+                  style={{
+                    width: "250px",
+                    backgroundColor: "#fff",
+                    borderRight: "1px solid #eaeaea",
+                    minHeight: "100vh",
+                    position: "fixed",
+                    left: 0,
+                    top: 0,
+                    transition: "all 0.3s ease",
+                    zIndex: 9999,
+                    overflowY: "auto",
+                  }}
+                >
+                  {/* Close on Mobile */}
+                  <button
+                    onClick={toggleMobileMenu}
+                    type="button"
+                    className="btn-close position-absolute top-3 end-3 d-md-none"
+                  ></button>
+
+                  {/* === TRAINER PROFILE SECTION === */}
+                  <div
+                    className="sidebar-profile-section d-flex flex-column align-items-center p-3 border-bottom"
+                    style={{ gap: "10px", textAlign: "center" }}
+                  >
+                    {/* Image */}
+                    <img
+                      src={profileImage || "/assets/images/profile/profile.jpg"}
+                      alt="Trainer"
+                      style={{
+                        width: "60px",
+                        height: "60px",
+                        borderRadius: "50%",
+                        border: "2px solid #ddd",
+                        objectFit: "cover",
+                        marginBottom: "5px",
+                      }}
+                    />
+
+                    {/* ====== GYM STATUS ====== */}
+                    {joinedGymCode ? (
+                      <div
+                        className="d-flex align-items-center gap-2 fw-bold text-primary"
+                        style={{
+                          fontSize: "14px",
+                          background: "#E3F2FD",
+                          padding: "6px 10px",
+                          borderRadius: "8px",
+                        }}
+                      >
+                        🏋️ {joinedGymCode}
+                        {approvalStatus === "pending" && (
+                          <span
+                            title="Pending Approval"
+                            className="text-warning"
+                          >
+                            ⏳
+                          </span>
+                        )}
+                        {approvalStatus === "approved" && (
+                          <span title="Approved" className="text-success">
+                            ✅
+                          </span>
+                        )}
+                        {approvalStatus === "rejected" && (
+                          <span title="Rejected" className="text-danger">
+                            ❌
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <button
+                        className="btn btn-sm btn-outline-primary rounded-pill px-3"
+                        onClick={() => setShowJoinGym(true)}
+                      >
+                        Join Gym
+                      </button>
+                    )}
+                  </div>
+
+                  {/* === TRAINER MENU === */}
+                  <ul className="sidebar-menu mt-3 px-2" id="sidebar-menu">
+                    <li>
+                      <Link
+                        href="/trainer"
+                        className={pathname === "/trainer" ? "active-page" : ""}
+                      >
+                        <Icon
+                          icon="solar:home-smile-angle-outline"
+                          className="menu-icon"
+                        />
+                        <span>Dashboard</span>
+                      </Link>
+                    </li>
+
+                    <li>
+                      <Link
+                        href="/trainer/attendance"
+                        className={
+                          pathname === "/trainer/attendance"
+                            ? "active-page"
+                            : ""
+                        }
+                      >
+                        <Icon icon="bi:calendar-check" className="menu-icon" />
+                        <span>Attendance</span>
+                      </Link>
+                    </li>
+
+                    <li>
+                      <Link
+                        href="/trainer/members"
+                        className={
+                          pathname === "/trainer/members" ? "active-page" : ""
+                        }
+                      >
+                        <Icon icon="bi:people-fill" className="menu-icon" />
+                        <span>My Members</span>
+                      </Link>
+                    </li>
+
+                    <li>
+                      <Link
+                        href="/trainer/schedule"
+                        className={
+                          pathname === "/trainer/schedule" ? "active-page" : ""
+                        }
+                      >
+                        <Icon icon="bi:calendar2-week" className="menu-icon" />
+                        <span>Schedule</span>
+                      </Link>
+                    </li>
+
+                    <li>
+                      <Link
+                        href="/trainer/workoutplan"
+                        className={
+                          pathname === "/trainer/workoutplan"
+                            ? "active-page"
+                            : ""
+                        }
+                      >
+                        <Icon icon="mdi:weight-lifter" className="menu-icon" />
+                        <span>Workout Plan</span>
+                      </Link>
+                    </li>
+
+                    <li>
+                      <Link
+                        href="/trainer/assignedworkouts"
+                        className={
+                          pathname === "/trainer/assignedworkouts"
+                            ? "active-page"
+                            : ""
+                        }
+                      >
+                        <Icon icon="mdi:weight-lifter" className="menu-icon" />
+                        <span>Assigned Workouts</span>
+                      </Link>
+                    </li>
+                  </ul>
+                </aside>
+              </>
+            )}
+
+            {showJoinGym && userRole === "trainer" && (
+              <div className="join-gym-backdrop">
+                <div className="join-gym-modal card shadow-lg p-4">
+                  <h5 className="mb-3">Join a Gym</h5>
+
+                  <input
+                    type="text"
+                    placeholder="Enter Gym Code"
+                    className="form-control mb-3"
+                    value={enteredCode}
+                    onChange={(e) => setEnteredCode(e.target.value)}
+                  />
+
+                  <button
+                    className="btn btn-primary w-100 mb-2"
+                    onClick={handleSubmitJoin}
+                  >
+                    Submit Request
+                  </button>
+
+                  <button
+                    className="btn btn-outline-secondary w-100"
+                    onClick={() => setShowJoinGym(false)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Member Sidebar */}
             {userRole === "member" && (

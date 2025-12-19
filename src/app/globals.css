@@ -61,3 +61,67 @@
     transform: translateX(-60%); /* adjust amount of scrolling */
   }
 }
+
+/* =========================================
+   FIX MODAL OVERLAP — ENSURE MODAL IS ABOVE EVERYTHING
+   ========================================= */
+.modal,
+.modal.fade.show,
+.modal-dialog,
+.modal-content {
+  z-index: 3000 !important;
+  position: relative;
+}
+
+.modal-backdrop {
+  z-index: 2999 !important;
+}
+
+/* Make modal cover entire screen regardless of MasterLayout spacing */
+.modal.d-block {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  overflow-y: auto !important;
+  background: rgba(0, 0, 0, 0.6) !important;
+}
+
+/* LOWER sidebar so it doesn't overlap modal */
+.sidebar,
+.sidebar-wrapper,
+.layout-sidebar,
+.layout-menu {
+  z-index: 1000 !important; /* Must be LOWER than modal */
+}
+
+@media (max-width: 768px) {
+  .modal-content {
+    padding: 15px !important;
+  }
+
+  .modal-dialog {
+    width: 100% !important;
+    margin: 10px auto !important;
+  }
+
+  img.img-fluid {
+    max-width: 100%;
+    height: auto;
+  }
+
+  h3,
+  h5 {
+    font-size: 1.1rem;
+  }
+
+  label.form-label {
+    font-size: 0.9rem;
+  }
+
+  .form-control,
+  .form-select {
+    font-size: 0.9rem;
+  }
+}

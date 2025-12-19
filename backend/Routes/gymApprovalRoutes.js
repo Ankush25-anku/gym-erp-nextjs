@@ -265,6 +265,47 @@ router.get(
   }
 );
 
+router.get(
+  "/trainer-approval-status/:gymCode",
+  verifyClerkToken,
+  async (req, res) => {
+    try {
+      const gymCode = req.params.gymCode?.toUpperCase();
+      const trainerEmail = req.clerkUser?.email;
+
+      console.log(
+        "📩 Trainer approval status API called for",
+        trainerEmail,
+        "in",
+        gymCode
+      );
+
+      const approvalDoc = await GymApproval.findOne({
+        gymCode,
+        requesterEmail: trainerEmail,
+        clerkRole: "trainer", // 👈 trainer role
+      });
+
+      if (!approvalDoc) {
+        return res.status(404).json({
+          success: false,
+          message: "No trainer approval request found",
+        });
+      }
+
+      console.log("✅ Found trainer approval status:", approvalDoc.status);
+
+      res.json({
+        success: true,
+        approvalStatus: approvalDoc.status || "pending",
+      });
+    } catch (err) {
+      console.error("❌ Error fetching trainer approval status:", err);
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
+);
+
 // -----------------------------------------------------------------------------
 // 🔹 Approve or Reject Join Requests
 // -----------------------------------------------------------------------------
@@ -348,6 +389,40 @@ router.get("/member-requests/:gymCode", verifyClerkToken, async (req, res) => {
     res.json({ success: true, requests });
   } catch (err) {
     console.error("❌ Error fetching member requests:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// -----------------------------------------------------------------------------
+// 🔹 GET /trainer-requests/:gymCode - Fetch all trainer requests for a gym
+// -----------------------------------------------------------------------------
+router.get("/trainer-requests/:gymCode", verifyClerkToken, async (req, res) => {
+  try {
+    const { gymCode } = req.params;
+
+    if (!gymCode) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Missing gymCode parameter" });
+    }
+
+    console.log(`📩 Fetching trainer requests for gym: ${gymCode}`);
+
+    const requests = await GymApproval.find({
+      gymCode: gymCode.toUpperCase(),
+      clerkRole: "trainer",
+      status: { $in: ["pending", "approved", "rejected"] },
+    }).sort({ requestedAt: -1 });
+
+    if (!requests.length) {
+      console.warn(`⚠️ No trainer requests found for gym: ${gymCode}`);
+      return res.json({ success: true, requests: [] });
+    }
+
+    console.log(`✅ Found ${requests.length} trainer requests`);
+    res.json({ success: true, requests });
+  } catch (err) {
+    console.error("❌ Error fetching trainer requests:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
@@ -468,6 +543,37 @@ router.get("/stats/:gymCode", verifyClerkToken, async (req, res) => {
       message: "Server error while fetching gym stats",
       error: err.message,
     });
+  }
+});
+// -----------------------------------------------------------------------------
+// 🔹 GET /members/:gymCode - Fetch all APPROVED members of a gym
+// -----------------------------------------------------------------------------
+router.get("/members/:gymCode", verifyClerkToken, async (req, res) => {
+  try {
+    const { gymCode } = req.params;
+
+    if (!gymCode) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Missing gymCode parameter" });
+    }
+
+    console.log(`📩 Fetching APPROVED members for gym: ${gymCode}`);
+
+    const members = await GymApproval.find({
+      gymCode: gymCode.toUpperCase(),
+      clerkRole: "member",
+      status: "approved",
+    })
+      .select("fullName requesterEmail gymCode profileImage requestedAt")
+      .sort({ fullName: 1 });
+
+    console.log(`✅ Found ${members.length} approved members`);
+
+    res.json({ success: true, members });
+  } catch (err) {
+    console.error("❌ Error fetching approved members:", err);
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 

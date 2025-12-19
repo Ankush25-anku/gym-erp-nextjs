@@ -2,22 +2,29 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useUser } from "@clerk/nextjs";
 import MasterLayout from "../../masterLayout/MasterLayout";
 import { Icon } from "@iconify/react";
 import Link from "next/link";
 
 export default function TrainerDashboard() {
   const router = useRouter();
+  const { isSignedIn } = useUser();
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
     const role = localStorage.getItem("userRole");
 
-    // 🔐 Redirect to login if not logged in or wrong role
-    if (!token || role !== "trainer") {
-      router.push("/login");
+    if (!isSignedIn) {
+      router.replace("/login");
+      return;
     }
-  }, [router]);
+
+    if (role !== "trainer") {
+      router.replace("/after-signin");
+      return;
+    }
+  }, [isSignedIn, router]);
+
 
   const activities = [
     { name: "John Doe", action: "Checked in", time: "10 mins ago", initials: "JD" },

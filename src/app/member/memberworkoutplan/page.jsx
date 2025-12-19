@@ -2,90 +2,142 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { useAuth, useUser } from "@clerk/nextjs";
 import MasterLayout from "../../../masterLayout/MasterLayout";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
 
 export default function MemberWorkoutPlan() {
-  const [members, setMembers] = useState([]);
-  const [error, setError] = useState(null);
+  const { getToken, isLoaded } = useAuth();
+  const { user } = useUser();
+
+  const [workouts, setWorkouts] = useState([]);
+
+  // Store dynamic image index per workout row:  "assignmentIndex-workoutIndex"
+  const [imageIndexes, setImageIndexes] = useState({});
 
   useEffect(() => {
-    const fetchAllMembers = async () => {
-      try {
-        const res = await axios.get(`${API_BASE}/api/member/workout-plans/all`);
-        setMembers(res.data);
-      } catch (err) {
-        console.error("❌ Failed to fetch all members:", err);
-        setError("Failed to load members.");
+    if (isLoaded && user) fetchWorkouts();
+  }, [isLoaded, user]);
+
+  const fetchWorkouts = async () => {
+    try {
+      const token = await getToken();
+
+      const memberEmail = user?.primaryEmailAddress?.emailAddress;
+      const gymKey = `joinedGymCode_member_${memberEmail}`;
+      const gymCode = localStorage.getItem(gymKey);
+
+      if (!gymCode) {
+        console.log("⚠️ No gym code found for member.");
+        return;
       }
-    };
 
-    fetchAllMembers();
-  }, []);
+      const res = await axios.get(
+        `${API_BASE}/api/trainer/workouts/member/${gymCode}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
-  if (error) return <div className="text-danger">{error}</div>;
-  if (members.length === 0) return <div>Loading...</div>;
+      if (res.data.success) {
+        setWorkouts(res.data.workouts);
+      }
+    } catch (err) {
+      console.error("❌ Error loading workouts:", err);
+    }
+  };
+
+  // Toggle workout image
+  const handleToggleImage = (assignmentIndex, workoutIndex, imagesArray) => {
+    const key = `${assignmentIndex}-${workoutIndex}`;
+
+    setImageIndexes((prev) => ({
+      ...prev,
+      [key]: prev[key] + 1 < imagesArray.length ? prev[key] + 1 : 0,
+    }));
+  };
 
   return (
     <MasterLayout>
       <div className="container mt-4">
-        <h2 className="fw-bold">All Member Workout Plans</h2>
+        <h2 className="fw-bold mb-3">My Workout Plan</h2>
 
-        {members.map((member, i) => (
-          <div key={member._id} className="card mb-4 p-3 shadow-sm">
-            <h5 className="fw-bold">{member.name}</h5>
-            <p>Email: {member.email}</p>
-            <p>Phone: {member.phone}</p>
-            <p>Plan: {member.plan}</p>
-            <p>Status: {member.status}</p>
-            <p>Joined: {member.joined}</p>
-            <p>Expires: {member.expires}</p>
+        {workouts.length === 0 ? (
+          <p className="text-muted">No workouts assigned yet.</p>
+        ) : (
+          workouts.map((assignment, assignmentIndex) => (
+            <div key={assignmentIndex} className="card mb-3 shadow-sm">
+              <div className="card-body">
+                <h5>
+                  Assigned On:{" "}
+                  {assignment.fromDate
+                    ? new Date(assignment.fromDate).toDateString()
+                    : "Unknown"}
+                </h5>
 
-            <h6 className="fw-bold mt-3">Assigned Workouts:</h6>
-            {member.assignedWorkouts?.length === 0 ? (
-              <p className="text-muted">No workouts assigned.</p>
-            ) : (
-              member.assignedWorkouts.map((w, wi) => (
-                <div key={wi} className="border p-2 mb-2 rounded">
-                  <strong>Day:</strong> {w.day} <br />
-                  <strong>Workout:</strong> {w.workout} <br />
-                  <strong>Weight:</strong> {w.weight} kg
-                  <br />
-                  <strong>Sets:</strong> {w.sets}
-                  <br />
-                  <strong>Reps:</strong> {w.reps}
-                  <br />
-                  <strong>Rest:</strong> {w.rest} min
-                  <br />
-                  <strong>Description:</strong> {w.description}
-                  <br />
-                  {w.images?.length > 0 && (
-                    <div className="d-flex flex-wrap gap-2 mt-2">
-                      {w.images.map((img, idx) => (
-                        <img
-                          key={idx}
-                          src={`/exercises/${img}`}
-                          alt="Workout Image"
-                          style={{
-                            width: "100px",
-                            height: "100px",
-                            objectFit: "cover",
-                            borderRadius: "8px",
-                          }}
-                          onError={(e) => {
-                            e.target.onerror = null;
-                            e.target.src = "/fallback.png";
-                          }}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-        ))}
+                <table className="table table-bordered small text-center mt-3">
+                  <thead className="table-light">
+                    <tr>
+                      <th>Day</th>
+                      <th>Workout</th>
+                      <th>Sets</th>
+                      <th>Reps</th>
+                      <th>Rest</th>
+                      <th>Weight</th>
+                      <th>Description</th>
+                      <th>Image</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {assignment.workouts.map((w, workoutIndex) => {
+                      const key = `${assignmentIndex}-${workoutIndex}`;
+                      const currentImageIndex = imageIndexes[key] || 0;
+
+                      return (
+                        <tr key={workoutIndex}>
+                          <td>{w.day}</td>
+                          <td>{w.workout}</td>
+                          <td>{w.sets}</td>
+                          <td>{w.reps}</td>
+                          <td>{w.rest} min</td>
+                          <td>{w.weight} kg</td>
+                          <td>{w.description}</td>
+
+                          <td>
+                            {Array.isArray(w.images) && w.images.length > 0 ? (
+                              <>
+                                <img
+                                  src={`/exercises/${w.images[currentImageIndex]}`}
+                                  className="img-fluid rounded"
+                                  style={{
+                                    maxHeight: "80px",
+                                    cursor: "pointer",
+                                  }}
+                                  onClick={() =>
+                                    handleToggleImage(
+                                      assignmentIndex,
+                                      workoutIndex,
+                                      w.images
+                                    )
+                                  }
+                                />
+                                <br />
+                                <small className="text-muted">
+                                  Click to change image
+                                </small>
+                              </>
+                            ) : (
+                              <i>No image</i>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))
+        )}
       </div>
     </MasterLayout>
   );
